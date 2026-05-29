@@ -1,17 +1,34 @@
 # 🔆 Zoomify — Image Detail Extraction Agent
 
-Zoomify is a **Gradio AI chatbot** that extracts information from **any
-hard-to-read image** — anything that is high-resolution, very large, very
-long/wide (e.g. tall **scrolling screenshots** or panoramas), densely packed, or
-has **tiny fonts** / small UI elements. Think maps & site plans, single-line and
-engineering diagrams, app dashboards and UI screenshots, scanned documents,
-spreadsheets, charts, and posters. (Solar site-maps are just one example.)
+**Vision LLMs are bad at reading whole images when the detail matters.**
 
-These images are large and the fonts are often tiny in some places and huge in
-others, so you usually can't read everything from the full image at once.
-The uploaded image is **auto-gridded**, then an OpenAI **vision model** walks an
-**image history path** — zooming into the relevant cells to read the detail —
-using four navigation tools.
+Send a blueprint, site map, engineering diagram, long desktop screenshot, dense
+dashboard, or any large info graphic to GPT-4o (or similar) in one shot and it
+will miss labels, invent values, or skim past the tiny parts — small UI icons,
+footnote text, legend entries, breaker ratings, parcel IDs, and table cells that
+only become readable when you zoom in. The model sees the full frame at once;
+it does not naturally pan, magnify, and re-read the way a human would with a
+PDF viewer.
+
+**Zoomify is a helper agent for exactly that.** Upload the image, ask a question,
+and an OpenAI vision model navigates a **labeled grid** — cropping, upscaling,
+and re-gridding regions until it can read the small print. It works like a
+human using zoom on a site plan or SLD: start at the overview, drill into the
+cells that matter, back out and retry if the wrong area was picked.
+
+Built for coders who need to **extract structured data from images models
+normally fail on**:
+
+- **Blueprints & single-line diagrams** — electrical, mechanical, architectural
+- **Site maps & parcel plans** — boundaries, labels, legend text
+- **Large desktop / app screenshots** — toolbars, status bars, small icons
+- **Long scrolling captures** — chat logs, tables, multi-panel UIs
+- **Posters, scans, and dense infographics** — mixed font sizes on one canvas
+
+Zoomify is a **Gradio app** plus a small **grid + zoom tool library** you can
+reuse in your own pipelines. The agent auto-grids the upload, walks a branching
+**zoom tree**, and answers from what it actually read — not from a blurry
+first glance.
 
 ## Tools
 
@@ -42,8 +59,8 @@ Zoomify/
 └── src/zoomify/
     ├── gridder.py          # grid engine: auto-grid + re-grid primitives
     ├── gridzoom.py         # crop + zoom + re-grid
-│   ├── tools.py            # tool schemas, history-stack image state, dispatch
-│   └── agent.py            # OpenAI vision + tool-calling loop
+    ├── tools.py            # tool schemas, history-stack image state, dispatch
+    └── agent.py            # OpenAI vision + tool-calling loop
 └── tests/                  # pytest suite (gridder/gridzoom/tools/agent/app)
 ```
 
@@ -125,3 +142,13 @@ uv run python -m pytest --cov=zoomify --cov=app    # with coverage
 
 No API key is required — the agent tests drive a scripted fake OpenAI client.
 
+## License
+
+Zoomify is released under the **[MIT License](LICENSE)**.
+
+You are free to use, modify, and ship this code in your own projects — commercial
+or open source — as long as you **keep the copyright notice and license text**
+and **give credit to [Zynclo Softwares](https://github.com/Zynclo-Softwares)**.
+A link back to this repository or a mention in your docs or README is enough.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) if you want to send a pull request.
