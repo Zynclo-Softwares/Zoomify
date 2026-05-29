@@ -15,6 +15,10 @@ dist/
 # OS
 .DS_Store
 
+# local / samples (not tracked for now)
+.vscode/
+Example Files/
+
 # runtime output
 output/
 .coverage
