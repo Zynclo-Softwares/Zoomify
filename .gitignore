@@ -4,13 +4,17 @@ __pycache__/
 .venv/
 *.egg-info/
 build/
-dist/
+/dist/
 
 # uv
 # (uv.lock IS committed; the cache is not)
 
 # env / secrets
 .env
+.env.*
+!.env.example
+**/secrets.auto.tfvars
+**/*credentials*
 
 # OS
 .DS_Store
@@ -22,3 +26,7 @@ Example Files/
 # runtime output
 output/
 .coverage
+
+# frontend
+frontend/node_modules/
+frontend/package-lock.json

@@ -9,6 +9,7 @@ from zoomify import gridder, gridzoom
 
 # --------------------------------------------------------------- parsing
 
+
 def test_letters_to_col():
     assert gridzoom.letters_to_col("A") == 0
     assert gridzoom.letters_to_col("Z") == 25
@@ -72,9 +73,11 @@ def test_parse_selection_out_of_range_row():
 
 # --------------------------------------------------------------- apply_gridzoom
 
+
 @pytest.fixture
 def gridded():
     from PIL import Image
+
     img = Image.new("RGB", (400, 300), "white")
     return gridder.apply_grid(img, cols=8)
 
@@ -127,6 +130,7 @@ def test_apply_gridzoom_partial_trailing_cell_crops_within_content():
     """The extra partial row/col (from rounding up) must crop to the true image
     edge — non-empty and not bleeding into the ruler margin."""
     from PIL import Image
+
     img, meta = gridder.apply_grid(Image.new("RGB", (400, 270), "white"), cols=8)
     assert meta.nrows == 6  # row 6 is the 20px partial strip
 
@@ -149,10 +153,19 @@ def test_apply_gridzoom_content_img_avoids_baked_grid(gridded):
     plain = Image.new("RGB", (400, 300), "white")
 
     dirty, _, _ = gridzoom.apply_gridzoom(
-        gridded_img, meta, "2C", zoom=2, regrid=False,
+        gridded_img,
+        meta,
+        "2C",
+        zoom=2,
+        regrid=False,
     )
     clean, _, _ = gridzoom.apply_gridzoom(
-        gridded_img, meta, "2C", zoom=2, regrid=False, content_img=plain,
+        gridded_img,
+        meta,
+        "2C",
+        zoom=2,
+        regrid=False,
+        content_img=plain,
     )
 
     def red_pixels(im):
@@ -189,10 +202,18 @@ def test_render_at_path_matches_single_zoom(gridded):
 
     step = ZoomStep(select="2C", zoom=3, regrid_cols=6)
     via_path, meta_path, content_path = gridzoom.render_at_path(
-        plain, meta, gridded_img, [step],
+        plain,
+        meta,
+        gridded_img,
+        [step],
     )
     direct, meta_direct, info = gridzoom.apply_gridzoom(
-        gridded_img, meta, "2C", zoom=3, regrid_cols=6, content_img=plain,
+        gridded_img,
+        meta,
+        "2C",
+        zoom=3,
+        regrid_cols=6,
+        content_img=plain,
     )
     assert via_path.size == direct.size
     assert meta_path.ncols == meta_direct.ncols

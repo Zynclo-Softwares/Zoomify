@@ -1,0 +1,28 @@
+.git
+.github
+.venv
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.coverage
+htmlcov
+.env
+.env.*
+!.env.example
+
+# Frontend — rebuilt inside Docker
+frontend/node_modules
+frontend/dist
+
+# Dev / docs / infra not needed at runtime
+tests
+terraform
+"Example Files"
+*.md
+!README.md
+.cursor
+agent-transcripts
+
+# Legacy Gradio UI (not used in production image)
+app.py

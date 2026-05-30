@@ -32,6 +32,7 @@ Image.MAX_IMAGE_PIXELS = None
 
 # --------------------------------------------------------------- selection
 
+
 def letters_to_col(s: str) -> int:
     s = s.upper()
     col = 0
@@ -94,7 +95,7 @@ def parse_selection(s: str, ncols: int, nrows: int) -> list[tuple[int, int, int,
     if not rects:
         raise ValueError("empty selection")
 
-    for (c0, r0, c1, r1) in rects:
+    for c0, r0, c1, r1 in rects:
         for c in (c0, c1):
             if not (0 <= c < ncols):
                 raise ValueError(
@@ -109,12 +110,14 @@ def parse_selection(s: str, ncols: int, nrows: int) -> list[tuple[int, int, int,
 
 # --------------------------------------------------------------- tool entry
 
-def selection_bbox(meta: GridMeta, select: str,
-                   content_w: int, content_h: int) -> tuple[tuple[int, int, int, int], list]:
+
+def selection_bbox(
+    meta: GridMeta, select: str, content_w: int, content_h: int
+) -> tuple[tuple[int, int, int, int], list]:
     """Map a cell selection to a pixel bbox in inner-content coordinates."""
     rects = parse_selection(select, meta.ncols, meta.nrows)
     pix = []
-    for (c0, r0, c1, r1) in rects:
+    for c0, r0, c1, r1 in rects:
         x0, y0, _, _ = gridder.cell_to_px(meta.cell_w, meta.cell_h, c0, r0)
         _, _, x1, y1 = gridder.cell_to_px(meta.cell_w, meta.cell_h, c1, r1)
         pix.append((x0, y0, x1, y1))
@@ -133,11 +136,16 @@ def selection_bbox(meta: GridMeta, select: str,
     return (x0, y0, x1, y1), rects
 
 
-def apply_gridzoom(img: Image.Image, meta: GridMeta, select: str,
-                   zoom: float = 3.0, regrid_cols: int = 10,
-                   regrid: bool = True,
-                   keep_ruler: bool = False,
-                   content_img: Image.Image | None = None) -> tuple[Image.Image, GridMeta, dict]:
+def apply_gridzoom(
+    img: Image.Image,
+    meta: GridMeta,
+    select: str,
+    zoom: float = 3.0,
+    regrid_cols: int = 10,
+    regrid: bool = True,
+    keep_ruler: bool = False,
+    content_img: Image.Image | None = None,
+) -> tuple[Image.Image, GridMeta, dict]:
     """Crop the selection, upscale, and re-grid.
 
     ``meta`` describes the grid on ``img``. When ``content_img`` is given it
@@ -167,7 +175,7 @@ def apply_gridzoom(img: Image.Image, meta: GridMeta, select: str,
     else:
         rects = parse_selection(select, meta.ncols, meta.nrows)
         pix = []
-        for (c0, r0, c1, r1) in rects:
+        for c0, r0, c1, r1 in rects:
             x0, y0, _, _ = gridder.cell_to_px(meta.cell_w, meta.cell_h, c0, r0)
             _, _, x1, y1 = gridder.cell_to_px(meta.cell_w, meta.cell_h, c1, r1)
             pix.append((x0 + margin, y0 + margin, x1 + margin, y1 + margin))
@@ -221,8 +229,9 @@ def apply_gridzoom(img: Image.Image, meta: GridMeta, select: str,
     return result, new_meta, info
 
 
-def render_at_path(original: Image.Image, root_meta: GridMeta, root_gridded: Image.Image,
-                   steps) -> tuple[Image.Image, GridMeta, Image.Image]:
+def render_at_path(
+    original: Image.Image, root_meta: GridMeta, root_gridded: Image.Image, steps
+) -> tuple[Image.Image, GridMeta, Image.Image]:
     """Replay a zoom recipe from the root and return (gridded, meta, content).
 
     ``steps`` is an iterable of objects with ``select``, ``zoom``, and
@@ -236,7 +245,11 @@ def render_at_path(original: Image.Image, root_meta: GridMeta, root_gridded: Ima
     gridded = root_gridded
     for step in steps:
         gridded, meta, info = apply_gridzoom(
-            gridded, meta, step.select, step.zoom, step.regrid_cols,
+            gridded,
+            meta,
+            step.select,
+            step.zoom,
+            step.regrid_cols,
             content_img=content,
         )
         content = info["content"]

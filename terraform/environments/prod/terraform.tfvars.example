@@ -1,0 +1,38 @@
+# Copy to terraform.tfvars (gitignored) and fill in Railway IDs + non-secret config.
+# cp terraform.tfvars.example terraform.tfvars
+#
+# Non-secret backend env vars below mirror root .env.example (plus Docker build key).
+# Secrets go in secrets.auto.tfvars. Stripe links + webhook secret come from the stripe module.
+
+webhook_url = "https://zoomify.zynclo.com/api/billing/webhook"
+
+enable_railway = true
+
+railway_project_name       = "zoomify"
+railway_service_name       = "zoomify"
+railway_environment_name   = "production"
+railway_source_repo        = "Zynclo-Softwares/Zoomify"
+railway_source_repo_branch = "main"
+railway_workspace_id       = ""
+
+# Leave empty on first apply to create project/service; paste IDs after first run.
+railway_project_id     = ""
+railway_environment_id = ""
+railway_service_id     = ""
+
+# Clerk publishable key — baked into Docker frontend build (VITE_CLERK_PUBLISHABLE_KEY).
+clerk_publishable_key = ""
+
+app_domain        = "zoomify.zynclo.com"
+manage_app_dns    = true
+route53_zone_name = "zynclo.com"
+
+# Non-secret backend env (merged with Stripe module outputs + defaults on apply).
+railway_env_vars = {
+  CLERK_JWKS_URL                = "https://clerk.zoomify.zynclo.com/.well-known/jwks.json"
+  MONGODB_DATABASE              = "Zoomify-Prod"
+  RATE_LIMIT_FREE_PER_MINUTE    = "10"
+  RATE_LIMIT_STARTER_PER_MINUTE = "30"
+  RATE_LIMIT_PRO_PER_MINUTE     = "60"
+  # OPENROUTER_BASE_URL defaults to https://openrouter.ai/api/v1 when omitted.
+}

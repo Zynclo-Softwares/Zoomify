@@ -1,0 +1,11 @@
+# Railway config-as-code for Zoomify production.
+# Overrides dashboard settings (fixes empty dockerfilePath breaking builds).
+# See: https://docs.railway.com/config-as-code/reference
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120

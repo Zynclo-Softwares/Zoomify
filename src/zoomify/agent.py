@@ -18,10 +18,10 @@ import json
 from openai import OpenAI
 from PIL import Image
 
-from .config import DEFAULT_MODEL, make_client
+from .config import DEFAULT_MODEL
 from .tools import ImageState, ToolResult, TOOLS_SCHEMA, encode_image, run_tool
 
-MAX_TOOL_ITERATIONS = 10
+MAX_TOOL_ITERATIONS = 50
 # Keep only the most recent N image-bearing messages in the running
 # conversation; older images are replaced with a text placeholder. We keep
 # exactly ONE so the model sees a single image at a time (the current pointer)
@@ -105,7 +105,8 @@ def _prune_old_images(messages: list[dict], keep: int = KEEP_RECENT_IMAGE_MSGS) 
     """Replace image parts of all but the last ``keep`` image-bearing messages
     with a short text placeholder, in place, to bound request size."""
     idxs = [
-        i for i, m in enumerate(messages)
+        i
+        for i, m in enumerate(messages)
         if isinstance(m.get("content"), list)
         and any(p.get("type") == "image_url" for p in m["content"])
     ]
@@ -117,8 +118,12 @@ def _prune_old_images(messages: list[dict], keep: int = KEEP_RECENT_IMAGE_MSGS) 
         messages[i] = {k: v for k, v in m.items() if k != "content"} | {"content": placeholder}
 
 
-def run_agent(messages: list[dict], state: ImageState,
-              client: OpenAI | None = None, model: str = DEFAULT_MODEL):
+def run_agent(
+    messages: list[dict],
+    state: ImageState,
+    client: OpenAI | None = None,
+    model: str = DEFAULT_MODEL,
+):
     """Run the tool-calling loop until the model produces a final answer.
 
     ``messages`` is the running conversation (already including the new user
@@ -138,8 +143,12 @@ def run_agent(messages: list[dict], state: ImageState,
         return stop.value
 
 
-def iter_agent(messages: list[dict], state: ImageState,
-               client: OpenAI | None = None, model: str = DEFAULT_MODEL):
+def iter_agent(
+    messages: list[dict],
+    state: ImageState,
+    client: OpenAI | None = None,
+    model: str = DEFAULT_MODEL,
+):
     """Generator variant of :func:`run_agent` for live UIs.
 
     Yields the (mutated) ``state`` after every tool round so callers can render
@@ -149,7 +158,7 @@ def iter_agent(messages: list[dict], state: ImageState,
     messages)`` tuple :func:`run_agent` returns.
     """
     if client is None:
-        client = make_client()
+        raise ValueError("OpenAI client is required")
 
     produced_images: list[Image.Image] = []
 
@@ -175,11 +184,13 @@ def iter_agent(messages: list[dict], state: ImageState,
             except json.JSONDecodeError:
                 args = {}
             result: ToolResult = run_tool(tc.function.name, args, state)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": result.text,
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result.text,
+                }
+            )
             if result.image is not None:
                 round_images.append(result.image)
                 produced_images.append(result.image)
@@ -187,7 +198,9 @@ def iter_agent(messages: list[dict], state: ImageState,
         # The Chat Completions API can't put images in a `tool` message, so feed
         # the processed image(s) back as a follow-up multimodal user message.
         if round_images:
-            content: list[dict] = [{"type": "text", "text": "Processed image(s) from the tool call:"}]
+            content: list[dict] = [
+                {"type": "text", "text": "Processed image(s) from the tool call:"}
+            ]
             for im in round_images:
                 content.append({"type": "image_url", "image_url": {"url": encode_image(im)}})
             messages.append({"role": "user", "content": content})
