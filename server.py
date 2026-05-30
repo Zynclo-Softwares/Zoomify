@@ -140,7 +140,7 @@ def list_models(
 async def query(
     query: str = Form(""),
     model: str | None = Form(None),
-    schema: str | None = Form(None),
+    schema_param: str | None = Form(None, alias="schema"),
     structured: bool = Form(True),
     session_id: str | None = Form(None),
     image: UploadFile | None = File(None),
@@ -175,7 +175,7 @@ async def query(
             image_bytes=image_bytes,
             api_key=api_key,
             model=model,
-            schema_param=schema,
+            schema_param=schema_param,
             structured=structured,
         ):
             if event.get("type") == "error":
