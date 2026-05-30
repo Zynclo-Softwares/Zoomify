@@ -6,8 +6,7 @@ Two-column layout:
   multimodal textbox with a "+" button to attach an image and a send button.
   Only image files are accepted. A one-click example (the Aviva electrical
   single-line diagram) is provided for free experimentation.
-- RIGHT: the image history DAG, drawn as a vertical tree (root at top, zoom
-  branches flowing downward), with the current node highlighted.
+- RIGHT: the zoom **breadcrumb trail** — root plus each stack step, collapsing on undo.
 
 Zoomify is a general-purpose detail extractor for any hard-to-read image
 (high-resolution, very large, very long/wide, dense, or tiny-font) — maps,
@@ -40,27 +39,25 @@ def _has_key() -> bool:
     return bool(os.environ.get("OPENAI_API_KEY"))
 
 
-# --------------------------------------------------------------- tree render
+# --------------------------------------------------------------- trail render
 
-_TREE_CSS = """
+_TRAIL_CSS = """
 <style>
-.dag { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; }
-.dag ul { list-style: none; margin: 0; padding-left: 20px; border-left: 2px solid #d4d4d8; }
-.dag > ul { padding-left: 0; border-left: none; }
-.dag li { margin: 8px 0; position: relative; }
-.dag .node { display: inline-flex; align-items: center; gap: 8px; padding: 5px 9px;
-  border: 1px solid #d4d4d8; border-radius: 10px; background: #fafafa; }
-.dag .node.current { border-color: #f59e0b; background: #fff7ed;
+.trail { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; }
+.trail .hint { color: #64748b; font-style: italic; margin-bottom: 10px; }
+.trail .crumbs { display: flex; flex-direction: column; gap: 8px; }
+.trail .crumb { display: inline-flex; align-items: center; gap: 8px; padding: 5px 9px;
+  border: 1px solid #d4d4d8; border-radius: 10px; background: #fafafa; max-width: 100%; }
+.trail .crumb.current { border-color: #f59e0b; background: #fff7ed;
   box-shadow: 0 0 0 2px #fcd34d; }
-.dag .node img.thumb { height: 60px; border: 1px solid #cbd5e1; border-radius: 4px;
-  display: block; cursor: zoom-in; transition: box-shadow .12s ease; }
-.dag .node img.thumb:hover { box-shadow: 0 0 0 2px #60a5fa; }
-.dag .node .lbl { line-height: 1.25; }
-.dag .node .lbl b { color: #334155; }
-.dag .node.current .lbl b { color: #b45309; }
-.dag .hint { color: #64748b; font-style: italic; }
+.trail .crumb img.thumb { height: 60px; border: 1px solid #cbd5e1; border-radius: 4px;
+  display: block; cursor: zoom-in; flex-shrink: 0; }
+.trail .crumb img.thumb:hover { box-shadow: 0 0 0 2px #60a5fa; }
+.trail .crumb .lbl { line-height: 1.25; }
+.trail .crumb .lbl b { color: #334155; }
+.trail .crumb.current .lbl b { color: #b45309; }
+.trail .sep { color: #94a3b8; padding-left: 20px; font-size: 11px; }
 
-/* node preview modal */
 .zmodal { position: fixed; inset: 0; z-index: 9999; display: none;
   align-items: center; justify-content: center; }
 .zmodal .zbackdrop { position: absolute; inset: 0; background: rgba(15,23,42,0.72); }
@@ -90,38 +87,42 @@ _MODAL_HTML = """
 """
 
 
-def _render_node(state: ImageState, nid: int) -> str:
-    n = state.nodes[nid]
-    cur = " current" if nid == state.current_id else ""
-    thumb = encode_image(n.image, max_side=160, fmt="JPEG")
-    preview = encode_image(n.image, max_side=1100, fmt="JPEG")
-    label = html.escape(n.label)
-    cap = html.escape(f"#{n.id} · {n.label}")
-    marker = " ◀ current" if nid == state.current_id else ""
+def _render_crumb(label: str, depth: int, img: Image.Image, current: bool) -> str:
+    cur = " current" if current else ""
+    thumb = encode_image(img, max_side=160, fmt="JPEG")
+    preview = encode_image(img, max_side=1100, fmt="JPEG")
+    safe_label = html.escape(label)
+    cap = html.escape(f"depth {depth} · {label}")
+    marker = " ◀ current" if current else ""
     onclick = (
         "var m=document.getElementById('zmodal');"
         "document.getElementById('zmodal-img').src=this.dataset.full;"
         "document.getElementById('zmodal-cap').textContent=this.dataset.cap;"
         "m.style.display='flex';"
     )
-    out = (
-        f'<li><div class="node{cur}">'
+    return (
+        f'<div class="crumb{cur}">'
         f'<img class="thumb" src="{thumb}" data-full="{preview}" data-cap="{cap}" '
-        f'alt="node {n.id}" title="Click to preview" onclick="{onclick}"/>'
-        f'<span class="lbl"><b>#{n.id}</b> {label}{marker}</span>'
+        f'alt="depth {depth}" title="Click to preview" onclick="{onclick}"/>'
+        f'<span class="lbl"><b>#{depth}</b> {safe_label}{marker}</span>'
         f'</div>'
     )
-    if n.children:
-        out += "<ul>" + "".join(_render_node(state, c) for c in n.children) + "</ul>"
-    out += "</li>"
-    return out
 
 
-def render_tree(state: ImageState | None) -> str:
-    if state is None or not state.nodes:
-        return _TREE_CSS + '<div class="dag"><p class="hint">Upload an image to start building the zoom tree.</p></div>'
-    body = _render_node(state, state.root_id)
-    return _TREE_CSS + f'<div class="dag"><ul>{body}</ul></div>' + _MODAL_HTML
+def render_trail(state: ImageState | None) -> str:
+    if state is None:
+        return _TRAIL_CSS + '<div class="trail"><p class="hint">Upload an image to start the zoom trail.</p></div>'
+    labels = state.checkpoint_labels()
+    crumbs = []
+    for depth, label in enumerate(labels):
+        img = state.render_prefix(depth)
+        crumbs.append(_render_crumb(label, depth, img, depth == len(labels) - 1))
+    body = "".join(crumbs)
+    return _TRAIL_CSS + f'<div class="trail"><div class="crumbs">{body}</div></div>' + _MODAL_HTML
+
+
+# Backward-compatible alias used in tests / handlers.
+render_tree = render_trail
 
 
 # --------------------------------------------------------------- helpers
@@ -263,7 +264,7 @@ def build_ui() -> gr.Blocks:
             "or app UIs, maps & diagrams, scans, spreadsheets, posters. Anything with **tiny "
             "fonts** or small details. The image is auto-gridded, then the agent **zooms** into "
             "cells (with **undo / redo / restore**) to read the detail. The right panel shows the "
-            "zoom **tree**.\n\n"
+            "zoom **trail** (breadcrumb stack).\n\n"
             f"**Model:** `{os.environ.get('OPENAI_MODEL', DEFAULT_MODEL)}` "
             f"· {'✅ API key detected' if _has_key() else '⚠️ set OPENAI_API_KEY in .env'}"
         )
@@ -289,7 +290,7 @@ def build_ui() -> gr.Blocks:
                     inputs=[chat_input],
                 )
             with gr.Column(scale=1):
-                tree = gr.HTML(value=render_tree(None), label="Zoom tree (DAG)")
+                tree = gr.HTML(value=render_trail(None), label="Zoom trail (stack)")
 
         outputs = [chatbot, conv_messages, image_state, tree, chat_input, stop_btn]
         submit_event = chat_input.submit(

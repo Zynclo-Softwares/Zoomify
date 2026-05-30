@@ -1,19 +1,16 @@
 """
-tools.py — agent tool layer (branching, cached image DAG).
+tools.py — agent tool layer (stack-based zoom path).
 
-Holds the stateful :class:`ImageState`, which is a **tree / DAG of images**: the
-root is the auto-gridded upload, and every ``zoom`` creates (or reuses) a child
-node. A movable ``current`` pointer marks the image being processed. Because the
-chess-grid selections are finite, identical zooms from the same node are
-**cached**: re-selecting a region just jumps the pointer to the existing child
-instead of recomputing.
+Holds the stateful :class:`ImageState`: the upload is auto-gridded at the root,
+and each ``zoom`` **pushes** a recipe step onto a stack. ``undo`` pops the last
+step; ``restore`` clears the stack. The current gridded view is rendered from
+``original + path`` on demand (no branching node DAG or stored intermediates).
 
 Tools (OpenAI function-calling):
-- zoom    : crop + upscale + re-grid the current image; branch to a (new or
-            cached) child node and make it current.
-- undo    : move the pointer to the PARENT node.
-- redo    : move the pointer forward to the child you last backed out of.
-- restore : jump the pointer back to the ROOT (full auto-gridded map).
+- zoom    : push a crop/upscale/re-grid step onto the path.
+- undo    : pop the last zoom step.
+- redo    : re-push the step last popped by ``undo``.
+- restore : clear the path back to the root view.
 
 Each tool returns a text status (for the ``tool`` role message) and the now
 current image (for a follow-up multimodal ``user`` message so the vision model
@@ -24,7 +21,6 @@ from __future__ import annotations
 
 import base64
 import io
-import re
 from dataclasses import dataclass, field
 
 from PIL import Image
@@ -35,92 +31,98 @@ from .gridder import GridMeta
 DEFAULT_GRID_COLS = 10
 
 
-# --------------------------------------------------------------- tree state
+# --------------------------------------------------------------- stack state
 
-@dataclass
-class Node:
-    """One image in the DAG."""
+@dataclass(frozen=True)
+class ZoomStep:
+    """One zoom operation relative to the view at its stack depth."""
 
-    id: int
-    parent: int | None
-    image: Image.Image
-    meta: GridMeta
-    label: str
-    content: Image.Image                   # ungridded inner content for clean zoom crops
-    action_key: str | None = None          # normalized action that created it
-    children: list[int] = field(default_factory=list)
+    select: str
+    zoom: float
+    regrid_cols: int
 
-
-def _normalize_action(rects, zoom: float, regrid_cols: int) -> str:
-    """Canonical key from parsed cell-rects so equivalent selections (e.g.
-    '1-2-A-C' and 'A-C-1-2', or '2C' and 'C2') hit the same cache entry."""
-    canon = sorted(tuple(r) for r in rects)
-    return f"zoom|{canon}|z{zoom:g}|g{regrid_cols}"
+    @property
+    def label(self) -> str:
+        return f"zoom {self.select} {self.zoom:g}x"
 
 
 @dataclass
 class ImageState:
-    """A branching, cached DAG of gridded images with a movable pointer."""
+    """Original upload plus a stack of zoom steps; current view is derived."""
 
     original: Image.Image
-    nodes: dict[int, Node] = field(default_factory=dict)
-    root_id: int = 0
-    current_id: int = 0
-    _next_id: int = 1
-    # parent_id -> child_id last entered, so `redo` can return there.
-    redo_target: dict[int, int] = field(default_factory=dict)
+    root_meta: GridMeta
+    root_image: Image.Image
+    root_label: str
+    path: list[ZoomStep] = field(default_factory=list)
+    _redo: ZoomStep | None = None
+    _cached_len: int = -1
+    _cached_gridded: Image.Image | None = field(default=None, repr=False)
+    _cached_meta: GridMeta | None = field(default=None, repr=False)
+    _cached_content: Image.Image | None = field(default=None, repr=False)
 
     @classmethod
     def from_image(cls, img: Image.Image, cols: int = DEFAULT_GRID_COLS) -> "ImageState":
         rgb = img.convert("RGB")
         gridded, meta = gridder.apply_grid(rgb, cols=cols)
-        root = Node(id=0, parent=None, image=gridded, meta=meta,
-                    label=f"grid {meta.ncols}x{meta.nrows}", content=rgb)
-        st = cls(original=rgb, nodes={0: root}, root_id=0, current_id=0, _next_id=1)
-        return st
+        label = f"grid {meta.ncols}x{meta.nrows}"
+        return cls(original=rgb, root_meta=meta, root_image=gridded, root_label=label)
 
-    # -- convenience -----------------------------------------------------
+    def _invalidate(self) -> None:
+        self._cached_len = -1
+        self._cached_gridded = None
+        self._cached_meta = None
+        self._cached_content = None
+
+    def _ensure_rendered(self) -> None:
+        if self._cached_len == len(self.path) and self._cached_gridded is not None:
+            return
+        gridded, meta, content = gridzoom.render_at_path(
+            self.original, self.root_meta, self.root_image, self.path,
+        )
+        self._cached_gridded = gridded
+        self._cached_meta = meta
+        self._cached_content = content
+        self._cached_len = len(self.path)
+
     @property
     def current(self) -> Image.Image:
-        return self.nodes[self.current_id].image
+        self._ensure_rendered()
+        assert self._cached_gridded is not None
+        return self._cached_gridded
 
     @property
     def meta(self) -> GridMeta:
-        return self.nodes[self.current_id].meta
+        self._ensure_rendered()
+        assert self._cached_meta is not None
+        return self._cached_meta
 
-    def _add_child(self, parent_id: int, image: Image.Image, meta: GridMeta,
-                   content: Image.Image, label: str, action_key: str) -> int:
-        nid = self._next_id
-        self._next_id += 1
-        self.nodes[nid] = Node(id=nid, parent=parent_id, image=image, meta=meta,
-                               label=label, content=content, action_key=action_key)
-        self.nodes[parent_id].children.append(nid)
-        return nid
+    @property
+    def content(self) -> Image.Image:
+        self._ensure_rendered()
+        assert self._cached_content is not None
+        return self._cached_content
 
-    def find_child(self, parent_id: int, action_key: str) -> int | None:
-        for cid in self.nodes[parent_id].children:
-            if self.nodes[cid].action_key == action_key:
-                return cid
-        return None
+    @property
+    def depth(self) -> int:
+        return len(self.path)
+
+    def checkpoint_labels(self) -> list[str]:
+        return [self.root_label, *(s.label for s in self.path)]
+
+    def render_prefix(self, depth: int) -> Image.Image:
+        """Gridded image at stack depth ``depth`` (0 = root)."""
+        depth = max(0, min(depth, len(self.path)))
+        gridded, _, _ = gridzoom.render_at_path(
+            self.original, self.root_meta, self.root_image, self.path[:depth],
+        )
+        return gridded
 
     def reset_to_root(self) -> None:
-        """Move the pointer back to the ROOT of the tree.
-
-        Called at the start of every new user query so navigation always
-        begins top-down from the full auto-gridded map. Resuming from wherever
-        the previous query left the pointer (deep in the tree) forces slow
-        bottom-up traversal and is harder for the model to reason about; the
-        existing branches stay cached, so re-zooming is still instant.
-        """
-        self.current_id = self.root_id
-
-    def depth(self, node_id: int) -> int:
-        d = 0
-        n = self.nodes[node_id]
-        while n.parent is not None:
-            d += 1
-            n = self.nodes[n.parent]
-        return d
+        """Clear the zoom stack (called at the start of each new user query)."""
+        self.path.clear()
+        self._redo = None
+        self._invalidate()
 
 
 # --------------------------------------------------------------- encoding
@@ -151,9 +153,8 @@ TOOLS_SCHEMA = [
                 "it, and re-overlay a fresh labeled grid so you can read small "
                 "fonts and drill deeper. The selection refers to the column "
                 "letters (A, B, ...) and row numbers (1, 2, ...) on the current "
-                "image. This branches to a child image in the history tree and "
-                "makes it current; you can `undo` to go back to the parent and "
-                "try a different region."
+                "image. This pushes a new step onto the zoom stack; use `undo` "
+                "to pop back if you picked the wrong region."
             ),
             "parameters": {
                 "type": "object",
@@ -192,9 +193,8 @@ TOOLS_SCHEMA = [
         "function": {
             "name": "undo",
             "description": (
-                "Move the pointer to the PARENT image (one step less zoomed). "
-                "Use this when a zoom selected the wrong region so you can pick a "
-                "different one from the previous view (creating a new branch)."
+                "Pop the last zoom step and return to the previous view. Use "
+                "this when the latest zoom selected the wrong region."
             ),
             "parameters": {"type": "object", "properties": {}},
         },
@@ -204,9 +204,7 @@ TOOLS_SCHEMA = [
         "function": {
             "name": "redo",
             "description": (
-                "Move the pointer FORWARD again to the child image you most "
-                "recently backed out of with `undo` (if you have not zoomed "
-                "somewhere else since)."
+                "Re-push the zoom step you most recently popped with `undo`."
             ),
             "parameters": {"type": "object", "properties": {}},
         },
@@ -216,9 +214,8 @@ TOOLS_SCHEMA = [
         "function": {
             "name": "restore",
             "description": (
-                "Jump the pointer back to the ROOT of the tree: the original "
-                "full map as it was first auto-gridded. Use this to begin a "
-                "fresh drill-down from the whole map."
+                "Clear the zoom stack and return to the ROOT (full auto-gridded "
+                "image)."
             ),
             "parameters": {"type": "object", "properties": {}},
         },
@@ -235,8 +232,8 @@ class ToolResult:
 
 
 def _pos(state: ImageState) -> str:
-    n = state.nodes[state.current_id]
-    return f"[node #{n.id}, depth {state.depth(n.id)}, {len(state.nodes)} total]"
+    n = len(state.checkpoint_labels())
+    return f"[depth {state.depth}, {n} checkpoint(s)]"
 
 
 def run_tool(name: str, args: dict, state: ImageState) -> ToolResult:
@@ -248,81 +245,59 @@ def run_tool(name: str, args: dict, state: ImageState) -> ToolResult:
         zoom = max(1.0, min(8.0, float(args.get("zoom", 3) or 3)))
         regrid_cols = max(2, min(30, int(args.get("regrid_cols", 10) or 10)))
 
-        # Parse + validate the selection up front so we can build a canonical
-        # cache key (equivalent selections reuse the same branch).
         try:
-            rects = gridzoom.parse_selection(select, state.meta.ncols, state.meta.nrows)
-        except ValueError as e:
-            return ToolResult(text=f"zoom error: {e}")
-        action_key = _normalize_action(rects, zoom, regrid_cols)
-
-        # Cache hit: identical zoom already taken from this node -> just jump.
-        cached = state.find_child(state.current_id, action_key)
-        if cached is not None:
-            state.redo_target[state.current_id] = cached
-            state.current_id = cached
-            return ToolResult(
-                text=f"(cached) Re-used existing branch for {select!r}. {_pos(state)} Image shown next.",
-                image=state.current,
-            )
-
-        node = state.nodes[state.current_id]
-        try:
-            img, new_meta, info = gridzoom.apply_gridzoom(
-                state.current, state.meta, select=select,
-                zoom=zoom, regrid_cols=regrid_cols,
-                content_img=node.content,
-            )
+            gridzoom.parse_selection(select, state.meta.ncols, state.meta.nrows)
         except ValueError as e:
             return ToolResult(text=f"zoom error: {e}")
 
-        rg = info["regrid"]
-        parent = state.current_id
-        nid = state._add_child(
-            parent, img, new_meta, info["content"],
-            f"zoom {select} {zoom:g}x", action_key,
-        )
-        state.redo_target[parent] = nid
-        state.current_id = nid
+        step = ZoomStep(select=select, zoom=zoom, regrid_cols=regrid_cols)
+        state.path.append(step)
+        state._redo = None
+        state._invalidate()
+        state._ensure_rendered()
+
         msg = (
-            f"Zoomed selection {select!r} ({info['regions']} region(s)) by {zoom:g}x: "
-            f"crop {info['crop_size'][0]}x{info['crop_size'][1]} -> "
-            f"{info['zoomed_size'][0]}x{info['zoomed_size'][1]}. Re-gridded with "
-            f"{rg['cols']} cols (A..{gridder.col_label(rg['cols'] - 1)}) x {rg['rows']} rows. "
-            f"`zoom` again to go deeper, or `undo` to try a different region. {_pos(state)} "
-            f"Image shown next."
+            f"Zoomed selection {select!r} by {zoom:g}x (stack depth {state.depth}). "
+            f"Pushed '{step.label}'. `zoom` again to go deeper, or `undo` to step back. "
+            f"{_pos(state)} Image shown next."
         )
-        return ToolResult(text=msg, image=img)
+        return ToolResult(text=msg, image=state.current)
 
     if name == "undo":
-        node = state.nodes[state.current_id]
-        if node.parent is None:
+        if not state.path:
             return ToolResult(text=f"Already at the root; nothing to undo. {_pos(state)}",
                               image=state.current)
-        state.redo_target[node.parent] = node.id
-        state.current_id = node.parent
+        state._redo = state.path.pop()
+        state._invalidate()
+        label = state._redo.label
         return ToolResult(
-            text=f"Stepped back to parent '{state.nodes[state.current_id].label}'. "
-                 f"{_pos(state)} Image shown next.",
+            text=f"Popped '{label}'. Now at depth {state.depth}. {_pos(state)} Image shown next.",
             image=state.current,
         )
 
     if name == "redo":
-        target = state.redo_target.get(state.current_id)
-        if target is None or target not in state.nodes:
-            return ToolResult(text=f"No forward branch to redo from here. {_pos(state)}",
+        if state._redo is None:
+            return ToolResult(text=f"No zoom step to redo. {_pos(state)}",
                               image=state.current)
-        state.current_id = target
+        step = state._redo
+        state.path.append(step)
+        state._redo = None
+        state._invalidate()
         return ToolResult(
-            text=f"Stepped forward to '{state.nodes[target].label}'. {_pos(state)} Image shown next.",
+            text=f"Redid '{step.label}'. Depth {state.depth}. {_pos(state)} Image shown next.",
             image=state.current,
         )
 
     if name == "restore":
-        state.current_id = state.root_id
+        if not state.path:
+            return ToolResult(
+                text=f"Already at the root '{state.root_label}'. {_pos(state)} Image shown next.",
+                image=state.current,
+            )
+        state.reset_to_root()
+        state._ensure_rendered()
         return ToolResult(
-            text=f"Jumped back to the root '{state.nodes[state.root_id].label}' "
-                 f"(the full auto-gridded map). {_pos(state)} Image shown next.",
+            text=f"Cleared stack; back at root '{state.root_label}'. {_pos(state)} Image shown next.",
             image=state.current,
         )
 

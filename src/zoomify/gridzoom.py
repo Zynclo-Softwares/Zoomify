@@ -219,3 +219,25 @@ def apply_gridzoom(img: Image.Image, meta: GridMeta, select: str,
     result, new_meta = gridder.draw_grid(zoomed, rcols, rrows, rcell, rcell)
     info["regrid"] = {"cols": rcols, "rows": rrows, "cell": rcell}
     return result, new_meta, info
+
+
+def render_at_path(original: Image.Image, root_meta: GridMeta, root_gridded: Image.Image,
+                   steps) -> tuple[Image.Image, GridMeta, Image.Image]:
+    """Replay a zoom recipe from the root and return (gridded, meta, content).
+
+    ``steps`` is an iterable of objects with ``select``, ``zoom``, and
+    ``regrid_cols`` attributes. An empty path returns the root view.
+    """
+    if not steps:
+        return root_gridded, root_meta, original.convert("RGB")
+
+    content = original.convert("RGB")
+    meta = root_meta
+    gridded = root_gridded
+    for step in steps:
+        gridded, meta, info = apply_gridzoom(
+            gridded, meta, step.select, step.zoom, step.regrid_cols,
+            content_img=content,
+        )
+        content = info["content"]
+    return gridded, meta, content

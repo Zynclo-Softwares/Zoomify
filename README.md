@@ -26,27 +26,25 @@ normally fail on**:
 - **Posters, scans, and dense infographics** — mixed font sizes on one canvas
 
 Zoomify is a **Gradio app** plus a small **grid + zoom tool library** you can
-reuse in your own pipelines. The agent auto-grids the upload, walks a branching
-**zoom tree**, and answers from what it actually read — not from a blurry
-first glance.
+reuse in your own pipelines. The agent auto-grids the upload, walks a **zoom
+stack** (breadcrumb path), and answers from what it actually read — not from a
+blurry first glance.
 
 ## Tools
 
 | Tool | What it does |
 |------|--------------|
-| **zoom** | Crops a selected cell/region (e.g. `2C`, `1-3-B-E`) from the current image, upscales it, and re-grids it. Branches to a (new or cached) child node and makes it current. |
-| **undo** | Moves the pointer to the **parent** image (e.g. to retry a different region after a wrong zoom). |
-| **redo** | Moves the pointer **forward** to the child you last backed out of. |
-| **restore** | Jumps the pointer back to the **root** — the full auto-gridded image. |
+| **zoom** | Crops a selected cell/region (e.g. `2C`, `1-3-B-E`), upscales it, re-grids it, and **pushes** a step onto the stack. |
+| **undo** | **Pops** the last zoom step (step back one level). |
+| **redo** | Re-pushes the step you last popped with `undo`. |
+| **restore** | Clears the stack back to the **root** — full auto-gridded image. |
 
-The pointer marks the single image currently being processed. Zooms form a
-**branching tree (DAG)**: zooming the wrong region, then `undo`-ing to the parent
-and picking a different one creates a new branch — so wrong guesses are cheap to
-back out of. Because the chess-grid choices are finite, the tree is also a
-**cache**: re-selecting a region already explored from a node jumps straight to
-that existing branch instead of recomputing. The grid/zoom engine lives in two
-files — `src/zoomify/gridder.py` (grid overlay, used to auto-grid + re-grid) and
-`src/zoomify/gridzoom.py` (crop + zoom + re-grid).
+The current view is always the top of the stack. Each step is stored as a
+**recipe** (selection + zoom + regrid settings); the gridded image is rendered
+from the original on demand — no branching node tree or stored intermediates.
+Wrong zoom → `undo` → try again; the trail **collapses** as you pop. Engine
+files: `src/zoomify/gridder.py` (grid overlay) and `src/zoomify/gridzoom.py`
+(crop, zoom, path rendering).
 
 ## Project layout
 
@@ -91,9 +89,8 @@ or, for a site-map:
 
 A one-click **example** (the Aviva electrical single-line diagram) is provided
 for free experimentation. The
-**right** panel shows the zoom **tree (DAG)** as a vertical layout — root at top,
-zoom branches flowing downward — with the current node highlighted `◀ current`,
-so you can follow (and see) the agent's drill-down. **Click any node thumbnail**
+**right** panel shows the zoom **trail** (breadcrumb stack) — root plus each
+zoom step, with the current level highlighted `◀ current`. **Click any thumbnail**
 to open a larger image preview; close it with the **✕** button (or by clicking
 outside the image). While the agent is working the input is **locked** and a
 **⏹ Stop** button appears — click it to cancel the in-flight run and re-enable
@@ -101,26 +98,20 @@ input.
 
 ## How it works
 
-1. On upload, the image is **auto-gridded** (labeled columns `A..`, rows `1..`)
-   and becomes the **root** of a zoom tree.
+1. On upload, the image is **auto-gridded** (labeled columns `A..`, rows `1..`).
 2. The model identifies which cells hold the requested information.
 3. It calls `zoom` (raise `zoom`/`regrid_cols` for tiny fonts) to read the
-   detail, drilling down repeatedly — each zoom re-grids the crop and branches
-   to a child node.
-4. It can `undo` (to the parent) to retry a different region after a wrong guess,
-   `redo` to step forward again, or `restore` to jump back to the full image.
-   Re-selecting a region already explored from a node is **cached** — the agent
-   jumps to the existing branch instead of recomputing.
+   detail, **pushing** steps onto a stack — each step re-grids the crop.
+4. It can `undo` to pop back, `redo` to re-push the last pop, or `restore` to
+   clear the stack to the full image.
 
 Because the Chat Completions API can't embed images in `tool` messages, each
 tool result is returned as a text status plus a follow-up multimodal `user`
 message carrying the processed image, so the model can actually see it. Only the
-**single most recent image** (the current pointer) is kept in context — older
-images are replaced with a text placeholder — so the model must genuinely
-navigate (`undo` / `redo` / `restore` / `zoom`) to revisit a node rather than
-relying on remembered images. As it navigates, the right-hand tree updates
-**live**, so you can watch the `◀ current` pointer travel through the DAG in
-real time.
+**single most recent image** (the stack top) is kept in context — older images
+are replaced with a text placeholder — so the model must navigate
+(`undo` / `redo` / `restore` / `zoom`) to revisit earlier levels. As it
+navigates, the right-hand trail updates **live**, collapsing when steps are popped.
 
 ## Configuration
 
