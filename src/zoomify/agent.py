@@ -41,19 +41,17 @@ usually too big to read everything at once.
 
 The uploaded image has ALREADY been auto-gridded for you: a labeled chess-style
 grid (columns A.., rows 1..) is overlaid so you can name any cell as '2C'/'C2'
-or a region as '1-3-B-E'. This first gridded image is the ROOT of an image
-history TREE. You navigate that tree with these tools:
+or a region as '1-3-B-E'. You navigate a **zoom stack** (a breadcrumb path)
+with these tools:
 
 - zoom(select, [zoom], [regrid_cols]): crop the selected cells/regions from the
-  CURRENT image, upscale them, and re-grid the result. This branches to a child
-  image and makes it current. (Re-selecting the same region from the same node
-  is cached and instant.)
-- undo: move to the PARENT image — use this if you zoomed the WRONG region, then
-  pick a different one (which creates a new branch).
-- redo: move forward again to the child you last backed out of.
-- restore: jump back to the ROOT (the full auto-gridded image).
+  CURRENT view, upscale them, and re-grid the result. This **pushes** a step onto
+  the stack.
+- undo: **pop** the last zoom step — use this if you zoomed the WRONG region.
+- redo: re-push the step you last popped with `undo`.
+- restore: **clear** the stack and return to the ROOT (full auto-gridded image).
 
-You can only see ONE image at a time — the current node — so you must actually
+You can only see ONE image at a time — the current stack top — so you must
 navigate (zoom / undo / redo / restore) to inspect different parts; don't assume
 you still remember a region you left.
 
@@ -63,7 +61,7 @@ Strategy:
 2. `zoom` into those regions (raise `zoom` to 4-6 and/or `regrid_cols` for tiny
    fonts). Each zoom re-grids the result so you can zoom again to go deeper. For
    long/tall images, work down region by region.
-3. If a zoom landed on the wrong area, `undo` to the parent and try a different
+3. If a zoom landed on the wrong area, `undo` to step back and try a different
    selection; use `restore` to start fresh from the full image.
 
 Be systematic and verify by zooming before stating values. When you have enough
@@ -136,7 +134,7 @@ def iter_agent(messages: list[dict], state: ImageState,
     """Generator variant of :func:`run_agent` for live UIs.
 
     Yields the (mutated) ``state`` after every tool round so callers can render
-    the pointer travelling through the tree in real time. When the model emits a
+    the breadcrumb trail updating in real time. When the model emits a
     final answer (or the iteration limit is hit) the generator stops and its
     ``StopIteration.value`` is the same ``(final_text, produced_images,
     messages)`` tuple :func:`run_agent` returns.
@@ -185,7 +183,7 @@ def iter_agent(messages: list[dict], state: ImageState,
                 content.append({"type": "image_url", "image_url": {"url": encode_image(im)}})
             messages.append({"role": "user", "content": content})
 
-        # Let callers observe the pointer after this round before we continue.
+        # Let callers observe the stack after this round before we continue.
         yield state
 
     return (

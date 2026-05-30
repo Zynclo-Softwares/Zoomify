@@ -76,8 +76,8 @@ def test_run_agent_executes_tool_then_answers(scripted_client):
     msgs = [{"role": "system", "content": "sys"}, build_user_turn("q", state.current)]
     final, produced, out = run_agent(msgs, state, client=client)
     assert final == "done reading"
-    assert len(produced) == 1            # one tool produced one image
-    assert len(state.nodes) == 2         # zoom created a branch
+    assert len(produced) == 1
+    assert state.depth == 1
     # role ordering: ... assistant(tool_call), tool, user(image), assistant(final)
     roles = [m["role"] for m in out]
     assert roles[0] == "system"
@@ -107,7 +107,7 @@ def test_run_agent_handles_bad_tool_arguments(scripted_client):
     msgs = [{"role": "system", "content": "sys"}, build_user_turn("q", state.current)]
     final, produced, out = run_agent(msgs, state, client=client)
     assert final == "couldn't read"
-    assert len(state.nodes) == 1  # bad selection added no node
+    assert len(state.path) == 0  # bad selection pushed nothing
     tool_msgs = [m for m in out if m["role"] == "tool"]
     assert any("zoom error" in m["content"] for m in tool_msgs)
 
@@ -140,6 +140,6 @@ def test_iter_agent_yields_state_per_tool_round(scripted_client):
 
 def test_keep_recent_image_msgs_is_one():
     """Only the current image should remain in context; the model must navigate
-    (undo/redo/restore) to revisit any other node."""
+    (undo/redo/restore) to revisit earlier checkpoints."""
     from zoomify.agent import KEEP_RECENT_IMAGE_MSGS
     assert KEEP_RECENT_IMAGE_MSGS == 1

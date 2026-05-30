@@ -166,3 +166,34 @@ def test_apply_gridzoom_content_img_avoids_baked_grid(gridded):
 
     assert red_pixels(dirty) > 0
     assert red_pixels(clean) == 0
+
+
+def test_render_at_path_empty_is_root(gridded):
+    from PIL import Image
+
+    gridded_img, meta = gridded
+    plain = Image.new("RGB", (400, 300), "white")
+    out, out_meta, content = gridzoom.render_at_path(plain, meta, gridded_img, [])
+    assert out is gridded_img
+    assert out_meta is meta
+    assert content.size == plain.size
+
+
+def test_render_at_path_matches_single_zoom(gridded):
+    from PIL import Image
+
+    gridded_img, meta = gridded
+    plain = Image.new("RGB", (400, 300), "white")
+
+    from zoomify.tools import ZoomStep
+
+    step = ZoomStep(select="2C", zoom=3, regrid_cols=6)
+    via_path, meta_path, content_path = gridzoom.render_at_path(
+        plain, meta, gridded_img, [step],
+    )
+    direct, meta_direct, info = gridzoom.apply_gridzoom(
+        gridded_img, meta, "2C", zoom=3, regrid_cols=6, content_img=plain,
+    )
+    assert via_path.size == direct.size
+    assert meta_path.ncols == meta_direct.ncols
+    assert content_path.size == info["content"].size

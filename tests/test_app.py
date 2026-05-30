@@ -1,4 +1,4 @@
-"""Tests for app.py — the Gradio handlers + tree renderer."""
+"""Tests for app.py — the Gradio handlers + trail renderer."""
 
 from __future__ import annotations
 
@@ -6,25 +6,33 @@ import app
 from zoomify.tools import ImageState, run_tool
 
 
-# --------------------------------------------------------------- tree render
+# --------------------------------------------------------------- trail render
 
-def test_render_tree_empty():
-    out = app.render_tree(None)
+def test_render_trail_empty():
+    out = app.render_trail(None)
     assert "Upload an image" in out
     assert "<style>" in out
 
 
-def test_render_tree_branch_and_current_marker(small_img):
+def test_render_trail_stack_and_current_marker(small_img):
     state = ImageState.from_image(small_img, cols=6)
     run_tool("zoom", {"select": "2C"}, state)
-    run_tool("undo", {}, state)
-    run_tool("zoom", {"select": "3D"}, state)  # second branch, now current
-    out = app.render_tree(state)
-    assert out.count('class="thumb"') == 3   # three nodes -> three thumbnails
+    run_tool("zoom", {"select": "1A"}, state)
+    out = app.render_trail(state)
+    assert out.count('class="thumb"') == 3   # root + two zoom steps
     assert "◀ current" in out
-    assert "node current" in out
-    assert 'id="zmodal"' in out              # preview modal is rendered
-    assert "data-full=" in out               # nodes carry a click-to-preview image
+    assert "crumb current" in out
+    assert 'id="zmodal"' in out
+    assert "data-full=" in out
+
+
+def test_render_trail_collapses_on_undo(small_img):
+    state = ImageState.from_image(small_img, cols=6)
+    run_tool("zoom", {"select": "2C"}, state)
+    run_tool("zoom", {"select": "1A"}, state)
+    run_tool("undo", {}, state)
+    out = app.render_trail(state)
+    assert out.count('class="thumb"') == 2
 
 
 # --------------------------------------------------------------- _extract_image
@@ -111,7 +119,7 @@ def test_respond_first_image_turn(monkeypatch, tmp_path, small_img, scripted_cli
     chat, conv, state, tree, cleared, stop = _last(app.respond(msg, [], [], None))
 
     assert isinstance(state, ImageState)
-    assert len(state.nodes) == 2  # the zoom branch
+    assert state.depth == 1
     assert chat[-1]["role"] == "assistant"
     assert chat[-1]["content"] == "Here is the extracted info."
     assert conv[0]["role"] == "system"
@@ -120,26 +128,22 @@ def test_respond_first_image_turn(monkeypatch, tmp_path, small_img, scripted_cli
 
 def test_respond_followup_text_turn(monkeypatch, tmp_path, small_img, scripted_client):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    # First turn: upload image.
     client1 = scripted_client([("final", "first answer")])
     monkeypatch.setattr(app, "OpenAI", lambda *a, **k: client1)
     msg1 = {"text": "q1", "files": [_png(tmp_path, small_img)]}
     chat, conv, state, tree, _, _ = _last(app.respond(msg1, [], [], None))
 
-    # Second turn: text only, no new image.
     client2 = scripted_client([("final", "second answer")])
     monkeypatch.setattr(app, "OpenAI", lambda *a, **k: client2)
     msg2 = {"text": "q2", "files": []}
     chat, conv, state, tree, _, _ = _last(app.respond(msg2, chat, conv, state))
 
     assert chat[-1]["content"] == "second answer"
-    # conversation kept the same system message / grew
     assert conv[0]["role"] == "system"
+    assert state.depth == 0  # follow-up resets stack to root
 
 
 def test_respond_locks_input_then_unlocks(monkeypatch, tmp_path, small_img, scripted_client):
-    """While working, the input is disabled and Stop enabled; afterwards the
-    reverse. (Inspect the gr.update payloads in the yielded tuples.)"""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     client = scripted_client([
         ("tools", [("zoom", {"select": "2C"})]),
@@ -149,11 +153,9 @@ def test_respond_locks_input_then_unlocks(monkeypatch, tmp_path, small_img, scri
 
     msg = {"text": "q", "files": [_png(tmp_path, small_img)]}
     updates = list(app.respond(msg, [], [], None))
-    # First yield locks the UI (input disabled, Stop enabled)...
     first_input, first_stop = updates[0][4], updates[0][5]
     assert first_input["interactive"] is False
     assert first_stop["interactive"] is True
-    # ...and the final yield restores it (input enabled, Stop disabled).
     last_input, last_stop = updates[-1][4], updates[-1][5]
     assert last_input["interactive"] is True
     assert last_stop["interactive"] is False
@@ -166,9 +168,7 @@ def test_on_stop_restores_ui():
     assert stop_upd["interactive"] is False
 
 
-def test_respond_streams_pointer_updates(monkeypatch, tmp_path, small_img, scripted_client):
-    """The handler should yield intermediate UI updates (so the tree pointer can
-    be watched moving) before the final answer."""
+def test_respond_streams_trail_updates(monkeypatch, tmp_path, small_img, scripted_client):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     client = scripted_client([
         ("tools", [("zoom", {"select": "2C"})]),
@@ -179,7 +179,6 @@ def test_respond_streams_pointer_updates(monkeypatch, tmp_path, small_img, scrip
 
     msg = {"text": "q", "files": [_png(tmp_path, small_img)]}
     updates = list(app.respond(msg, [], [], None))
-    # initial tree + one per tool round + final = at least 3 yields
     assert len(updates) >= 3
     assert updates[-1][0][-1]["content"] == "done"
 
