@@ -69,9 +69,21 @@ def test_compute_geometry_by_cell():
     assert nrows == 6
 
 
-def test_compute_geometry_defaults_to_10_cols():
+def test_compute_geometry_auto_cols_from_size():
     ncols, *_ = gridder.compute_geometry(1000, 500)
-    assert ncols == 10
+    assert ncols == gridder.auto_grid_cols(1000, 500)
+
+
+def test_auto_grid_cols_root_and_regrid():
+    assert gridder.auto_grid_cols(400, 300) == 3  # min(400,300)/120 -> 3
+    assert gridder.auto_grid_cols(2400, 1800) == 15  # 1800/120
+    # After zoom: keep ~same cell width as parent (50px -> 5 cols on 250px wide)
+    assert gridder.auto_grid_cols(250, 200, parent_cell_w=50.0) == 5
+
+
+def test_auto_grid_cols_clamped():
+    assert gridder.auto_grid_cols(200, 200) == gridder.MIN_GRID_COLS
+    assert gridder.auto_grid_cols(5000, 5000) == gridder.MAX_GRID_COLS
 
 
 def test_apply_grid_adds_margin_and_returns_meta():

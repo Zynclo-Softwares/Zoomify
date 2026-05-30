@@ -35,7 +35,7 @@ Every change goes through **one issue → one patch branch → one PR**.
 
 7. **Wait for CI** — the `test` status check must pass on the PR.
 
-8. **Do not merge** until checks are green and branch protection is satisfied.
+8. **Do not merge** until checks are green, branch protection is satisfied, **and the user has explicitly approved merging the PR.**
 
 ## PR checklist
 
@@ -45,6 +45,7 @@ Every change goes through **one issue → one patch branch → one PR**.
 - [ ] Tests pass locally
 - [ ] PR body includes `Fixes #<issue-number>`
 - [ ] CI `test` check is green
+- [ ] User has explicitly approved merge (agents must not merge on their own)
 
 ## Do not
 
@@ -52,6 +53,7 @@ Every change goes through **one issue → one patch branch → one PR**.
 - Bundle unrelated changes in one issue/PR
 - Skip the issue when implementing fixes or features
 - Push without running pytest
+- Merge a PR without **explicit user approval**, even when CI is green
 
 ## Repo notes for agents
 

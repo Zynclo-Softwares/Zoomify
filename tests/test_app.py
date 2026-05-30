@@ -91,14 +91,16 @@ def _last(gen):
 
 
 def test_respond_no_key(monkeypatch, tmp_path, small_img):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     msg = {"text": "read it", "files": [_png(tmp_path, small_img)]}
     chat, conv, state, tree, cleared, stop = _last(app.respond(msg, [], [], None))
-    assert any("OPENAI_API_KEY" in m["content"] for m in chat)
+    assert any("OPENROUTER_API_KEY" in m["content"] for m in chat)
 
 
 def test_respond_rejects_non_image(monkeypatch, tmp_path):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     p = tmp_path / "x.txt"
     p.write_text("nope")
     msg = {"text": "hi", "files": [str(p)]}
@@ -108,12 +110,13 @@ def test_respond_rejects_non_image(monkeypatch, tmp_path):
 
 
 def test_respond_first_image_turn(monkeypatch, tmp_path, small_img, scripted_client):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     client = scripted_client([
         ("tools", [("zoom", {"select": "2C"})]),
         ("final", "Here is the extracted info."),
     ])
-    monkeypatch.setattr(app, "OpenAI", lambda *a, **k: client)
+    monkeypatch.setattr(app, "make_client", lambda: client)
 
     msg = {"text": "what's here?", "files": [_png(tmp_path, small_img)]}
     chat, conv, state, tree, cleared, stop = _last(app.respond(msg, [], [], None))
@@ -127,14 +130,15 @@ def test_respond_first_image_turn(monkeypatch, tmp_path, small_img, scripted_cli
 
 
 def test_respond_followup_text_turn(monkeypatch, tmp_path, small_img, scripted_client):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     client1 = scripted_client([("final", "first answer")])
-    monkeypatch.setattr(app, "OpenAI", lambda *a, **k: client1)
+    monkeypatch.setattr(app, "make_client", lambda: client1)
     msg1 = {"text": "q1", "files": [_png(tmp_path, small_img)]}
     chat, conv, state, tree, _, _ = _last(app.respond(msg1, [], [], None))
 
     client2 = scripted_client([("final", "second answer")])
-    monkeypatch.setattr(app, "OpenAI", lambda *a, **k: client2)
+    monkeypatch.setattr(app, "make_client", lambda: client2)
     msg2 = {"text": "q2", "files": []}
     chat, conv, state, tree, _, _ = _last(app.respond(msg2, chat, conv, state))
 
@@ -144,12 +148,13 @@ def test_respond_followup_text_turn(monkeypatch, tmp_path, small_img, scripted_c
 
 
 def test_respond_locks_input_then_unlocks(monkeypatch, tmp_path, small_img, scripted_client):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     client = scripted_client([
         ("tools", [("zoom", {"select": "2C"})]),
         ("final", "done"),
     ])
-    monkeypatch.setattr(app, "OpenAI", lambda *a, **k: client)
+    monkeypatch.setattr(app, "make_client", lambda: client)
 
     msg = {"text": "q", "files": [_png(tmp_path, small_img)]}
     updates = list(app.respond(msg, [], [], None))
@@ -169,13 +174,14 @@ def test_on_stop_restores_ui():
 
 
 def test_respond_streams_trail_updates(monkeypatch, tmp_path, small_img, scripted_client):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     client = scripted_client([
         ("tools", [("zoom", {"select": "2C"})]),
         ("tools", [("zoom", {"select": "1B"})]),
         ("final", "done"),
     ])
-    monkeypatch.setattr(app, "OpenAI", lambda *a, **k: client)
+    monkeypatch.setattr(app, "make_client", lambda: client)
 
     msg = {"text": "q", "files": [_png(tmp_path, small_img)]}
     updates = list(app.respond(msg, [], [], None))
@@ -184,7 +190,8 @@ def test_respond_streams_trail_updates(monkeypatch, tmp_path, small_img, scripte
 
 
 def test_respond_text_without_prior_image(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     msg = {"text": "hello", "files": []}
     chat, conv, state, tree, cleared, stop = _last(app.respond(msg, [], [], None))
     assert any("attach an image" in m["content"] for m in chat)

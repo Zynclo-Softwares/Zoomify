@@ -28,7 +28,15 @@ from PIL import Image
 from . import gridder, gridzoom
 from .gridder import GridMeta
 
-DEFAULT_GRID_COLS = 10
+
+def _estimate_regrid_cols(state: "ImageState", select: str, zoom: float) -> int:
+    """Pick re-grid columns from the post-zoom crop size and parent cell width."""
+    cw, ch = state.content.size
+    bbox, _ = gridzoom.selection_bbox(state.meta, select, cw, ch)
+    x0, y0, x1, y1 = bbox
+    nw = max(1, int(round((x1 - x0) * zoom)))
+    nh = max(1, int(round((y1 - y0) * zoom)))
+    return gridder.auto_grid_cols(nw, nh, parent_cell_w=state.meta.cell_w)
 
 
 # --------------------------------------------------------------- stack state
@@ -62,7 +70,7 @@ class ImageState:
     _cached_content: Image.Image | None = field(default=None, repr=False)
 
     @classmethod
-    def from_image(cls, img: Image.Image, cols: int = DEFAULT_GRID_COLS) -> "ImageState":
+    def from_image(cls, img: Image.Image, cols: int | None = None) -> "ImageState":
         rgb = img.convert("RGB")
         gridded, meta = gridder.apply_grid(rgb, cols=cols)
         label = f"grid {meta.ncols}x{meta.nrows}"
@@ -180,8 +188,9 @@ TOOLS_SCHEMA = [
                         "type": "integer",
                         "minimum": 2,
                         "maximum": 30,
-                        "description": "Columns for the fresh grid drawn on the "
-                                       "zoomed crop (default 10).",
+                        "description": "Columns for the fresh grid on the zoomed "
+                                       "crop. Omit to auto-pick from crop size "
+                                       "(~120px cells, similar to the parent view).",
                     },
                 },
                 "required": ["select"],
@@ -194,7 +203,8 @@ TOOLS_SCHEMA = [
             "name": "undo",
             "description": (
                 "Pop the last zoom step and return to the previous view. Use "
-                "this when the latest zoom selected the wrong region."
+                "when your latest zoom targeted the wrong cells — you can "
+                "immediately try a different `select` from that parent view."
             ),
             "parameters": {"type": "object", "properties": {}},
         },
@@ -204,7 +214,9 @@ TOOLS_SCHEMA = [
         "function": {
             "name": "redo",
             "description": (
-                "Re-push the zoom step you most recently popped with `undo`."
+                "Re-push the zoom step you most recently popped with `undo`. "
+                "Use only if you undid by mistake and want that zoom back "
+                "without re-entering the selection."
             ),
             "parameters": {"type": "object", "properties": {}},
         },
@@ -243,12 +255,17 @@ def run_tool(name: str, args: dict, state: ImageState) -> ToolResult:
         if not select:
             return ToolResult(text="Missing 'select'. Provide cells/regions like '2C' or '1-3-B-E'.")
         zoom = max(1.0, min(8.0, float(args.get("zoom", 3) or 3)))
-        regrid_cols = max(2, min(30, int(args.get("regrid_cols", 10) or 10)))
 
         try:
             gridzoom.parse_selection(select, state.meta.ncols, state.meta.nrows)
         except ValueError as e:
             return ToolResult(text=f"zoom error: {e}")
+
+        raw_cols = args.get("regrid_cols")
+        if raw_cols is None or raw_cols == "":
+            regrid_cols = _estimate_regrid_cols(state, select, zoom)
+        else:
+            regrid_cols = max(2, min(30, int(raw_cols)))
 
         step = ZoomStep(select=select, zoom=zoom, regrid_cols=regrid_cols)
         state.path.append(step)
