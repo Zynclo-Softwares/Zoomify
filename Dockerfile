@@ -68,7 +68,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
 
 COPY src ./src
-COPY server.py ./
+COPY server.py README.md ./
 RUN uv sync --frozen --no-dev
 
 
