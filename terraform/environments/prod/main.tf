@@ -8,10 +8,22 @@ module "stripe" {
 }
 
 locals {
-  route53_record_names = var.enable_railway && var.manage_app_dns ? [var.app_domain] : []
+  manage_dns = var.enable_railway && var.manage_app_dns
 
-  route53_record_targets = var.enable_railway && var.manage_app_dns ? {
+  route53_record_names = local.manage_dns ? [var.app_domain] : []
+
+  route53_record_targets = local.manage_dns ? {
     (var.app_domain) = module.railway[0].app_dns_record.target
+  } : {}
+
+  # Railway domain-ownership TXT (_railway-verify.<app_domain>). The name is
+  # deterministic (known at plan time); the value comes from the railway module.
+  verification_record_name = "_railway-verify.${var.app_domain}"
+
+  route53_txt_record_names = local.manage_dns ? [local.verification_record_name] : []
+
+  route53_txt_record_values = local.manage_dns ? {
+    (local.verification_record_name) = try(module.railway[0].app_dns_verification_record.target, "")
   } : {}
 }
 
@@ -51,6 +63,9 @@ module "route53" {
   zone_id        = data.aws_route53_zone.app[0].zone_id
   record_names   = local.route53_record_names
   record_targets = local.route53_record_targets
+
+  txt_record_names  = local.route53_txt_record_names
+  txt_record_values = local.route53_txt_record_values
 
   depends_on = [module.railway]
 }
