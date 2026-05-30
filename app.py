@@ -23,10 +23,10 @@ import os
 
 import gradio as gr
 from dotenv import load_dotenv
-from openai import OpenAI
 from PIL import Image
 
-from zoomify.agent import DEFAULT_MODEL, SYSTEM_PROMPT, build_user_turn, iter_agent
+from zoomify.agent import SYSTEM_PROMPT, build_user_turn, iter_agent
+from zoomify.config import DEFAULT_MODEL, has_api_key, make_client
 from zoomify.tools import ImageState, encode_image
 
 load_dotenv()
@@ -36,7 +36,7 @@ DEFAULT_PROMPT = "Extract the key information from this image; zoom in to read a
 
 
 def _has_key() -> bool:
-    return bool(os.environ.get("OPENAI_API_KEY"))
+    return has_api_key()
 
 
 # --------------------------------------------------------------- trail render
@@ -45,16 +45,18 @@ _TRAIL_CSS = """
 <style>
 .trail { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; }
 .trail .hint { color: #64748b; font-style: italic; margin-bottom: 10px; }
-.trail .crumbs { display: flex; flex-direction: column; gap: 8px; }
-.trail .crumb { display: inline-flex; align-items: center; gap: 8px; padding: 5px 9px;
-  border: 1px solid #d4d4d8; border-radius: 10px; background: #fafafa; max-width: 100%; }
+.trail .crumbs { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.trail .crumb { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px;
+  border: 1px solid #d4d4d8; border-radius: 10px; background: #fafafa; width: fit-content;
+  max-width: 100%; box-sizing: border-box; }
 .trail .crumb.current { border-color: #f59e0b; background: #fff7ed;
   box-shadow: 0 0 0 2px #fcd34d; }
-.trail .crumb img.thumb { height: 60px; border: 1px solid #cbd5e1; border-radius: 4px;
-  display: block; cursor: zoom-in; flex-shrink: 0; }
+.trail .crumb img.thumb { height: 56px; width: auto; border: 1px solid #cbd5e1; border-radius: 4px;
+  display: block; cursor: zoom-in; flex-shrink: 0; object-fit: contain; }
 .trail .crumb img.thumb:hover { box-shadow: 0 0 0 2px #60a5fa; }
-.trail .crumb .lbl { line-height: 1.25; }
+.trail .crumb .lbl { line-height: 1.25; color: #334155; font-size: 12px; white-space: nowrap; }
 .trail .crumb .lbl b { color: #334155; }
+.trail .crumb.current .lbl { color: #92400e; }
 .trail .crumb.current .lbl b { color: #b45309; }
 .trail .sep { color: #94a3b8; padding-left: 20px; font-size: 11px; }
 
@@ -89,7 +91,7 @@ _MODAL_HTML = """
 
 def _render_crumb(label: str, depth: int, img: Image.Image, current: bool) -> str:
     cur = " current" if current else ""
-    thumb = encode_image(img, max_side=160, fmt="JPEG")
+    thumb = encode_image(img, max_side=120, fmt="JPEG")
     preview = encode_image(img, max_side=1100, fmt="JPEG")
     safe_label = html.escape(label)
     cap = html.escape(f"depth {depth} · {label}")
@@ -184,7 +186,8 @@ def respond(message, chat_history, conv_messages, image_state):
         chat_history += [
             {"role": "user", "content": text or "[uploaded map]"},
             {"role": "assistant", "content":
-                "⚠️ No `OPENAI_API_KEY` found. Add it to a `.env` file (see `.env.example`) and restart."},
+                "⚠️ No API key found. Set `OPENROUTER_API_KEY` (or `OPENAI_API_KEY`) "
+                "in `.env` (see `.env.example`) and restart."},
         ]
         yield chat_history, conv_messages, image_state, render_tree(image_state), idle_input, stop_off
         return
@@ -218,8 +221,8 @@ def respond(message, chat_history, conv_messages, image_state):
     yield chat_history, conv_messages, image_state, render_tree(image_state), busy_input, stop_on
 
     try:
-        client = OpenAI()
-        model = os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
+        client = make_client()
+        model = DEFAULT_MODEL
         gen = iter_agent(conv_messages, image_state, client, model)
         final = ""
         while True:
@@ -265,8 +268,8 @@ def build_ui() -> gr.Blocks:
             "fonts** or small details. The image is auto-gridded, then the agent **zooms** into "
             "cells (with **undo / redo / restore**) to read the detail. The right panel shows the "
             "zoom **trail** (breadcrumb stack).\n\n"
-            f"**Model:** `{os.environ.get('OPENAI_MODEL', DEFAULT_MODEL)}` "
-            f"· {'✅ API key detected' if _has_key() else '⚠️ set OPENAI_API_KEY in .env'}"
+            f"**Model:** `{DEFAULT_MODEL}` "
+            f"· {'✅ API key detected' if _has_key() else '⚠️ set OPENROUTER_API_KEY in .env'}"
         )
 
         conv_messages = gr.State([])

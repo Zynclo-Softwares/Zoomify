@@ -21,6 +21,30 @@ from PIL import Image, ImageDraw, ImageFont
 
 Image.MAX_IMAGE_PIXELS = None  # allow very large / high-resolution images
 
+DEFAULT_TARGET_CELL_PX = 120
+MIN_GRID_COLS = 3
+MAX_GRID_COLS = 24
+
+
+def auto_grid_cols(width: int, height: int, *,
+                   target_cell: float = DEFAULT_TARGET_CELL_PX,
+                   min_cols: int = MIN_GRID_COLS,
+                   max_cols: int = MAX_GRID_COLS,
+                   parent_cell_w: float | None = None) -> int:
+    """Pick a column count so cells stay readable on ``width`` x ``height``.
+
+    When ``parent_cell_w`` is given (during re-grid after zoom), keep a similar
+    cell size to the view being zoomed from; otherwise target ~``target_cell``
+    pixels per cell on the shorter side.
+    """
+    width = max(1, width)
+    height = max(1, height)
+    if parent_cell_w and parent_cell_w > 0:
+        cols = round(width / parent_cell_w)
+    else:
+        cols = round(min(width, height) / target_cell)
+    return max(min_cols, min(max_cols, cols or min_cols))
+
 
 @dataclass
 class GridMeta:
@@ -110,7 +134,8 @@ def compute_geometry(width: int, height: int, cols: int | None = None,
     """Return (ncols, nrows, cell_w, cell_h) for an image of the given size.
 
     Provide either ``cols`` (number of columns; rows derived to keep cells
-    square) or ``cell`` (fixed square cell size in pixels). Defaults to 10 cols.
+    square) or ``cell`` (fixed square cell size in pixels). When ``cols`` is
+    omitted, :func:`auto_grid_cols` picks a readable column count from size.
 
     Derived counts round **up** (ceil): when the image size isn't an exact
     multiple of the cell size, the leftover strip gets its own (partial)
@@ -122,7 +147,7 @@ def compute_geometry(width: int, height: int, cols: int | None = None,
         ncols = _cells_needed(width, cell_w)
         nrows = _cells_needed(height, cell_h)
     else:
-        ncols = max(1, cols or 10)
+        ncols = max(1, cols if cols is not None else auto_grid_cols(width, height))
         cell_w = width / ncols
         cell_h = cell_w  # square cells
         nrows = _cells_needed(height, cell_h)
@@ -204,7 +229,11 @@ def draw_grid(img: Image.Image, ncols: int, nrows: int,
 
 def apply_grid(img: Image.Image, cols: int | None = None,
                cell: int | None = None) -> tuple[Image.Image, GridMeta]:
-    """Tool entry point: grid a plain image, returning (gridded_image, meta)."""
+    """Tool entry point: grid a plain image, returning (gridded_image, meta).
+
+    When ``cols`` and ``cell`` are both omitted, column count is chosen from
+    image size via :func:`auto_grid_cols`.
+    """
     W, H = img.size
     ncols, nrows, cell_w, cell_h = compute_geometry(W, H, cols=cols, cell=cell)
     return draw_grid(img, ncols, nrows, cell_w, cell_h)

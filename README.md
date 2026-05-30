@@ -51,7 +51,7 @@ files: `src/zoomify/gridder.py` (grid overlay) and `src/zoomify/gridzoom.py`
 ```
 Zoomify/
 ├── pyproject.toml          # uv project
-├── .env.example            # OPENAI_API_KEY, OPENAI_MODEL
+├── .env.example            # OPENROUTER_API_KEY, LLM_MODEL
 ├── app.py                  # Gradio entrypoint
 ├── "Example Files"/         # sample images (Aviva electrical SLD, etc.)
 └── src/zoomify/
@@ -69,7 +69,7 @@ Install [`uv`](https://docs.astral.sh/uv/) (`brew install uv` or
 
 ```bash
 uv sync                     # creates .venv/ and installs dependencies
-cp .env.example .env        # then edit .env and add your OPENAI_API_KEY
+cp .env.example .env        # then edit .env and add your OPENROUTER_API_KEY
 ```
 
 ## Run
@@ -117,8 +117,10 @@ navigates, the right-hand trail updates **live**, collapsing when steps are popp
 
 Set in `.env`:
 
-- `OPENAI_API_KEY` — your OpenAI key.
-- `OPENAI_MODEL` — any vision + tool-calling model (default `gpt-4o`).
+- `OPENROUTER_API_KEY` — your [OpenRouter](https://openrouter.ai/) key (preferred).
+- `LLM_MODEL` — vision + tool-calling model (default `google/gemini-3.1-flash-lite`).
+- `OPENROUTER_BASE_URL` — optional override (default `https://openrouter.ai/api/v1`).
+- `OPENAI_API_KEY` / `OPENAI_MODEL` — fallback when not using OpenRouter.
 
 ## Tests
 

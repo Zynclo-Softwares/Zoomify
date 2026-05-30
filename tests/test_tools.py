@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from zoomify import gridder
 from zoomify.tools import ImageState, ZoomStep, encode_image, run_tool
 
 
@@ -147,6 +148,12 @@ def test_regrid_cols_clamped_high(state):
     run_tool("zoom", {"select": "2C", "regrid_cols": 999}, state)
     assert state.path[-1].regrid_cols == 30
     assert state.meta.ncols == 30
+
+
+def test_auto_regrid_cols_when_omitted(state):
+    run_tool("zoom", {"select": "2C", "zoom": 3}, state)
+    assert state.path[-1].regrid_cols >= gridder.MIN_GRID_COLS
+    assert state.path[-1].regrid_cols <= gridder.MAX_GRID_COLS
 
 
 # --------------------------------------------------------------- encoding

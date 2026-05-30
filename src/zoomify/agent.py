@@ -14,14 +14,13 @@ Chat Completions API cannot embed images inside ``tool`` role messages.
 from __future__ import annotations
 
 import json
-import os
 
 from openai import OpenAI
 from PIL import Image
 
+from .config import DEFAULT_MODEL, make_client
 from .tools import ImageState, ToolResult, TOOLS_SCHEMA, encode_image, run_tool
 
-DEFAULT_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 MAX_TOOL_ITERATIONS = 10
 # Keep only the most recent N image-bearing messages in the running
 # conversation; older images are replaced with a text placeholder. We keep
@@ -46,10 +45,19 @@ with these tools:
 
 - zoom(select, [zoom], [regrid_cols]): crop the selected cells/regions from the
   CURRENT view, upscale them, and re-grid the result. This **pushes** a step onto
-  the stack.
-- undo: **pop** the last zoom step — use this if you zoomed the WRONG region.
-- redo: re-push the step you last popped with `undo`.
-- restore: **clear** the stack and return to the ROOT (full auto-gridded image).
+  the stack. Omit `regrid_cols` to auto-pick a readable grid from the crop size.
+- undo: **pop** the last zoom step — use when you picked the WRONG region. You
+  land back on the parent view and can `zoom` again with a better selection.
+- redo: re-push the step you last popped with `undo` — only if you undid by
+  mistake and want that exact zoom back (same selection, factor, and grid).
+- restore: **clear** the entire stack and return to the ROOT (full auto-gridded
+  image). Use when you need a fresh overview, not just one step back.
+
+**Undo / redo workflow:** You work on a breadcrumb stack. Each `zoom` pushes;
+`undo` pops one level (wrong cell? pop and retry). If you pop and then realize
+the popped zoom was correct after all, call `redo` once — it restores only the
+most recent pop. A new `zoom` after `undo` discards the redo buffer. `restore`
+jumps all the way to the root in one step.
 
 You can only see ONE image at a time — the current stack top — so you must
 navigate (zoom / undo / redo / restore) to inspect different parts; don't assume
@@ -58,11 +66,12 @@ you still remember a region you left.
 Strategy:
 1. Look at the current gridded image and decide which cells/regions hold the
    information the user asked about.
-2. `zoom` into those regions (raise `zoom` to 4-6 and/or `regrid_cols` for tiny
-   fonts). Each zoom re-grids the result so you can zoom again to go deeper. For
-   long/tall images, work down region by region.
-3. If a zoom landed on the wrong area, `undo` to step back and try a different
-   selection; use `restore` to start fresh from the full image.
+2. `zoom` into those regions (raise `zoom` to 4-6 for tiny fonts; regrid is
+   auto unless you need finer/coarser cells). Each zoom re-grids the result so
+   you can zoom again to go deeper. For long/tall images, work down region by
+   region.
+3. Wrong zoom? `undo` to pop back and try a different `select`. Undid by
+   mistake? `redo`. Lost in deep zooms? `restore` to the full image.
 
 Be systematic and verify by zooming before stating values. When you have enough
 detail, give a clear, structured answer citing the regions you inspected. If the
@@ -140,7 +149,7 @@ def iter_agent(messages: list[dict], state: ImageState,
     messages)`` tuple :func:`run_agent` returns.
     """
     if client is None:
-        client = OpenAI()
+        client = make_client()
 
     produced_images: list[Image.Image] = []
 
