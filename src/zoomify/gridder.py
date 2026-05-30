@@ -26,11 +26,15 @@ MIN_GRID_COLS = 3
 MAX_GRID_COLS = 24
 
 
-def auto_grid_cols(width: int, height: int, *,
-                   target_cell: float = DEFAULT_TARGET_CELL_PX,
-                   min_cols: int = MIN_GRID_COLS,
-                   max_cols: int = MAX_GRID_COLS,
-                   parent_cell_w: float | None = None) -> int:
+def auto_grid_cols(
+    width: int,
+    height: int,
+    *,
+    target_cell: float = DEFAULT_TARGET_CELL_PX,
+    min_cols: int = MIN_GRID_COLS,
+    max_cols: int = MAX_GRID_COLS,
+    parent_cell_w: float | None = None,
+) -> int:
     """Pick a column count so cells stay readable on ``width`` x ``height``.
 
     When ``parent_cell_w`` is given (during re-grid after zoom), keep a similar
@@ -67,6 +71,7 @@ class GridMeta:
 
 
 # --------------------------------------------------------------- helpers
+
 
 def col_label(i: int) -> str:
     """0 -> 'A', 25 -> 'Z', 26 -> 'AA', ..."""
@@ -112,6 +117,7 @@ def load_font(size: int) -> ImageFont.FreeTypeFont:
 
 # --------------------------------------------------------------- geometry
 
+
 def _cells_needed(extent: float, cell: float) -> int:
     """Number of cells of size ``cell`` needed to cover ``extent`` pixels.
 
@@ -129,8 +135,9 @@ def _cells_needed(extent: float, cell: float) -> int:
     return max(1, math.ceil(units))
 
 
-def compute_geometry(width: int, height: int, cols: int | None = None,
-                     cell: int | None = None) -> tuple[int, int, float, float]:
+def compute_geometry(
+    width: int, height: int, cols: int | None = None, cell: int | None = None
+) -> tuple[int, int, float, float]:
     """Return (ncols, nrows, cell_w, cell_h) for an image of the given size.
 
     Provide either ``cols`` (number of columns; rows derived to keep cells
@@ -156,8 +163,10 @@ def compute_geometry(width: int, height: int, cols: int | None = None,
 
 # --------------------------------------------------------------- drawing
 
-def draw_grid(img: Image.Image, ncols: int, nrows: int,
-              cell_w: float, cell_h: float) -> tuple[Image.Image, GridMeta]:
+
+def draw_grid(
+    img: Image.Image, ncols: int, nrows: int, cell_w: float, cell_h: float
+) -> tuple[Image.Image, GridMeta]:
     """Overlay a labeled grid + ruler margin on ``img``.
 
     Returns the composited RGBA image and the :class:`GridMeta` describing it.
@@ -187,8 +196,7 @@ def draw_grid(img: Image.Image, ncols: int, nrows: int,
         draw.line([(margin, y), (margin + W, y)], fill=line_color, width=line_w)
 
     border_w = max(3, line_w + 1)
-    draw.rectangle([margin, margin, margin + W, margin + H],
-                   outline=line_color, width=border_w)
+    draw.rectangle([margin, margin, margin + W, margin + H], outline=line_color, width=border_w)
 
     label_fill = (0, 0, 0, 255)
 
@@ -202,10 +210,15 @@ def draw_grid(img: Image.Image, ncols: int, nrows: int,
         label = col_label(c)
         bb = draw.textbbox((0, 0), label, font=font)
         tw, th = bb[2] - bb[0], bb[3] - bb[1]
-        draw.text((cx - tw // 2 - bb[0], margin // 2 - th // 2 - bb[1]),
-                  label, fill=label_fill, font=font)
-        draw.text((cx - tw // 2 - bb[0], margin + H + margin // 2 - th // 2 - bb[1]),
-                  label, fill=label_fill, font=font)
+        draw.text(
+            (cx - tw // 2 - bb[0], margin // 2 - th // 2 - bb[1]), label, fill=label_fill, font=font
+        )
+        draw.text(
+            (cx - tw // 2 - bb[0], margin + H + margin // 2 - th // 2 - bb[1]),
+            label,
+            fill=label_fill,
+            font=font,
+        )
 
     # Row numbers along left AND right margins.
     for r in range(nrows):
@@ -215,10 +228,15 @@ def draw_grid(img: Image.Image, ncols: int, nrows: int,
         label = str(r + 1)
         bb = draw.textbbox((0, 0), label, font=font)
         tw, th = bb[2] - bb[0], bb[3] - bb[1]
-        draw.text((margin // 2 - tw // 2 - bb[0], cy - th // 2 - bb[1]),
-                  label, fill=label_fill, font=font)
-        draw.text((margin + W + margin // 2 - tw // 2 - bb[0], cy - th // 2 - bb[1]),
-                  label, fill=label_fill, font=font)
+        draw.text(
+            (margin // 2 - tw // 2 - bb[0], cy - th // 2 - bb[1]), label, fill=label_fill, font=font
+        )
+        draw.text(
+            (margin + W + margin // 2 - tw // 2 - bb[0], cy - th // 2 - bb[1]),
+            label,
+            fill=label_fill,
+            font=font,
+        )
 
     composited = Image.alpha_composite(canvas, overlay)
     meta = GridMeta(ncols=ncols, nrows=nrows, cell_w=cell_w, cell_h=cell_h, margin=margin)
@@ -227,8 +245,10 @@ def draw_grid(img: Image.Image, ncols: int, nrows: int,
 
 # --------------------------------------------------------------- tool entry
 
-def apply_grid(img: Image.Image, cols: int | None = None,
-               cell: int | None = None) -> tuple[Image.Image, GridMeta]:
+
+def apply_grid(
+    img: Image.Image, cols: int | None = None, cell: int | None = None
+) -> tuple[Image.Image, GridMeta]:
     """Tool entry point: grid a plain image, returning (gridded_image, meta).
 
     When ``cols`` and ``cell`` are both omitted, column count is chosen from

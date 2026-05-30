@@ -1,0 +1,17 @@
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/crash.log
+
+# Variable files with secrets — never commit
+**/*.tfvars
+!**/*.tfvars.example
+**/secrets.auto.tfvars
+**/*.auto.tfvars
+!**/*.auto.tfvars.example
+
+# Generated / credential exports
+**/.env.stripe.generated
+**/.env.railway.generated
+**/railway.credentials.*
+**/*credentials*.tfvars

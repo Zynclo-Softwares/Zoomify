@@ -11,6 +11,10 @@ build/
 
 # env / secrets
 .env
+.env.*
+!.env.example
+**/secrets.auto.tfvars
+**/*credentials*
 
 # OS
 .DS_Store
@@ -25,3 +29,4 @@ output/
 
 # frontend
 frontend/node_modules/
+frontend/package-lock.json

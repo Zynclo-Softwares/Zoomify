@@ -1,46 +1,34 @@
 import pytest
-from fastapi.testclient import TestClient
-from PIL import Image
 
-import server
 from zoomify.schema_registry import (
     METADATA_KEY,
     resolve_schema,
     validate_schema_id,
 )
-from zoomify.session import store
 from zoomify.trail import render_trail
-
-
-@pytest.fixture
-def client():
-    store.clear()
-    return TestClient(server.app)
-
-
-@pytest.fixture
-def small_png_bytes():
-    img = Image.new("RGB", (120, 80), "white")
-    import io
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
 
 
 def test_health(client):
     r = client.get("/api/health")
     assert r.status_code == 200
     assert r.json()["ok"] is True
+    assert "byok_ready" in r.json()
+    assert "clerk_enabled" in r.json()
 
 
-def test_models_endpoint(client, monkeypatch):
+def test_models_endpoint(client, monkeypatch, byok_headers):
     monkeypatch.setattr(
         "server.model_dropdown_update",
         lambda **_: {"choices": ["alpha/model"], "value": "alpha/model"},
     )
-    r = client.get("/api/models")
+    r = client.get("/api/models", headers=byok_headers)
     assert r.status_code == 200
     assert r.json()["choices"] == ["alpha/model"]
+
+
+def test_models_requires_encrypted_key(client):
+    r = client.get("/api/models")
+    assert r.status_code == 401
 
 
 def test_validate_schema_id():
@@ -74,27 +62,27 @@ def test_render_trail_empty():
     assert "Upload an image" in render_trail(None)
 
 
-def test_query_requires_key(client, small_png_bytes, monkeypatch):
-    monkeypatch.setattr("zoomify.query_runner.has_api_key", lambda: False)
+def test_query_requires_key(client, small_png_bytes):
     r = client.post(
         "/api/query",
         data={"query": "read it"},
         files={"image": ("t.png", small_png_bytes, "image/png")},
     )
-    body = r.text
-    assert "error" in body
-    assert "API key" in body
+    assert r.status_code == 401
 
 
-def test_query_stream_session_line(client, small_png_bytes, monkeypatch, scripted_client):
-    monkeypatch.setattr("zoomify.query_runner.has_api_key", lambda: True)
-    fake = scripted_client([("final", "hello")])
-    monkeypatch.setattr("zoomify.query_runner.make_client", lambda: fake)
+def test_query_stream_session_line(client, small_png_bytes, monkeypatch, byok_headers):
+    def fake_run(**kwargs):
+        yield {"type": "session", "session_id": "s1"}
+        yield {"type": "assistant", "content": "hello"}
+
+    monkeypatch.setattr("server.run_query_stream", fake_run)
 
     r = client.post(
         "/api/query",
         data={"query": "what?", "model": "alpha/model"},
         files={"image": ("t.png", small_png_bytes, "image/png")},
+        headers=byok_headers,
     )
     assert r.status_code == 200
     lines = [ln for ln in r.text.strip().split("\n") if ln]
@@ -102,11 +90,11 @@ def test_query_stream_session_line(client, small_png_bytes, monkeypatch, scripte
     assert any('"type": "assistant"' in ln for ln in lines)
 
 
-def test_query_invalid_schema(client, small_png_bytes, monkeypatch):
-    monkeypatch.setattr("zoomify.query_runner.has_api_key", lambda: True)
+def test_query_invalid_schema(client, small_png_bytes, byok_headers):
     r = client.post(
         "/api/query",
         data={"query": "x", "schema": "bad-schema"},
         files={"image": ("t.png", small_png_bytes, "image/png")},
+        headers=byok_headers,
     )
     assert "Unknown or invalid schema" in r.text

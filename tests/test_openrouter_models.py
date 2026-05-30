@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 
 import pytest
 
@@ -23,23 +22,37 @@ def _clear_cache():
     reset_cache()
 
 
-def test_fetch_vision_models_filters_image_and_tools(monkeypatch):
+def test_fetch_vision_models_filters_image_tools_and_structured(monkeypatch):
     payload = {
         "data": [
             {
                 "id": "good/model",
-                "architecture": {"input_modalities": ["text", "image"], "output_modalities": ["text"]},
-                "supported_parameters": ["tools", "temperature"],
+                "architecture": {
+                    "input_modalities": ["text", "image"],
+                    "output_modalities": ["text"],
+                },
+                "supported_parameters": ["tools", "structured_outputs", "temperature"],
             },
             {
                 "id": "text-only/model",
                 "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
-                "supported_parameters": ["tools"],
+                "supported_parameters": ["tools", "structured_outputs"],
             },
             {
                 "id": "no-tools/model",
-                "architecture": {"input_modalities": ["text", "image"], "output_modalities": ["text"]},
-                "supported_parameters": ["temperature"],
+                "architecture": {
+                    "input_modalities": ["text", "image"],
+                    "output_modalities": ["text"],
+                },
+                "supported_parameters": ["temperature", "structured_outputs"],
+            },
+            {
+                "id": "no-structured/model",
+                "architecture": {
+                    "input_modalities": ["text", "image"],
+                    "output_modalities": ["text"],
+                },
+                "supported_parameters": ["tools", "temperature"],
             },
         ]
     }
@@ -67,11 +80,18 @@ def test_fetch_vision_models_caches_until_refresh(monkeypatch):
 
     def fake_get(url, api_key=None):
         calls["n"] += 1
-        return {"data": [{
-            "id": "cached/model",
-            "architecture": {"input_modalities": ["image", "text"], "output_modalities": ["text"]},
-            "supported_parameters": ["tools"],
-        }]}
+        return {
+            "data": [
+                {
+                    "id": "cached/model",
+                    "architecture": {
+                        "input_modalities": ["image", "text"],
+                        "output_modalities": ["text"],
+                    },
+                    "supported_parameters": ["tools", "structured_outputs"],
+                }
+            ]
+        }
 
     monkeypatch.setattr("zoomify.openrouter_models._http_get_json", fake_get)
     assert fetch_vision_models() == ["cached/model"]

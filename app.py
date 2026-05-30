@@ -17,7 +17,7 @@ import gradio as gr
 from dotenv import load_dotenv
 
 from zoomify.agent import SYSTEM_PROMPT, build_user_turn, iter_agent
-from zoomify.config import DEFAULT_MODEL, api_key, has_api_key, make_client
+from zoomify.config import DEFAULT_MODEL, make_client
 from zoomify.openrouter_models import model_dropdown_update, resolve_model
 from zoomify.query_runner import DEFAULT_PROMPT
 from zoomify.tools import ImageState
@@ -29,16 +29,21 @@ EXAMPLE_IMAGE = os.path.join("Example Files", "Aviva", "106 Aviva -Electrical - 
 
 
 def _has_key() -> bool:
-    return has_api_key()
+    return bool(os.environ.get("OPENROUTER_API_KEY", "").strip())
+
+
+def _legacy_api_key() -> str | None:
+    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    return key or None
 
 
 def initial_model_dropdown() -> tuple[list[str], str]:
-    upd = model_dropdown_update(api_key=api_key())
+    upd = model_dropdown_update(api_key=_legacy_api_key())
     return upd["choices"], upd["value"]
 
 
 def refresh_model_dropdown():
-    upd = model_dropdown_update(api_key=api_key(), force_refresh=True)
+    upd = model_dropdown_update(api_key=_legacy_api_key(), force_refresh=True)
     return gr.update(choices=upd["choices"], value=upd["value"])
 
 
@@ -75,13 +80,27 @@ def respond(message, chat_history, conv_messages, image_state, model=DEFAULT_MOD
                 {"role": "user", "content": text or "[attachment]"},
                 {"role": "assistant", "content": "❌ Only image files are accepted."},
             ]
-            yield chat_history, conv_messages, image_state, render_tree(image_state), idle_input, stop_off
+            yield (
+                chat_history,
+                conv_messages,
+                image_state,
+                render_tree(image_state),
+                idle_input,
+                stop_off,
+            )
             return
     else:
         img = None
 
     if img is None and not text:
-        yield chat_history, conv_messages, image_state, render_tree(image_state), idle_input, stop_off
+        yield (
+            chat_history,
+            conv_messages,
+            image_state,
+            render_tree(image_state),
+            idle_input,
+            stop_off,
+        )
         return
 
     if not _has_key():
@@ -89,7 +108,14 @@ def respond(message, chat_history, conv_messages, image_state, model=DEFAULT_MOD
             {"role": "user", "content": text or "[uploaded map]"},
             {"role": "assistant", "content": "⚠️ Set OPENROUTER_API_KEY in `.env` and restart."},
         ]
-        yield chat_history, conv_messages, image_state, render_tree(image_state), idle_input, stop_off
+        yield (
+            chat_history,
+            conv_messages,
+            image_state,
+            render_tree(image_state),
+            idle_input,
+            stop_off,
+        )
         return
 
     if img is not None:
@@ -97,12 +123,26 @@ def respond(message, chat_history, conv_messages, image_state, model=DEFAULT_MOD
         image_state = ImageState.from_image(img)
         conv_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         conv_messages.append(build_user_turn(prompt, image_state.current))
-        chat_history = [{"role": "user", "content": (text + "  \n*(new map uploaded)*") if text else "*(new map uploaded)*"}]
+        chat_history = [
+            {
+                "role": "user",
+                "content": (text + "  \n*(new map uploaded)*") if text else "*(new map uploaded)*",
+            }
+        ]
     else:
         if not conv_messages:
             chat_history.append({"role": "user", "content": text})
-            chat_history.append({"role": "assistant", "content": "Please attach an image with your first message."})
-            yield chat_history, conv_messages, image_state, render_tree(image_state), idle_input, stop_off
+            chat_history.append(
+                {"role": "assistant", "content": "Please attach an image with your first message."}
+            )
+            yield (
+                chat_history,
+                conv_messages,
+                image_state,
+                render_tree(image_state),
+                idle_input,
+                stop_off,
+            )
             return
         if image_state is not None:
             image_state.reset_to_root()
@@ -114,7 +154,7 @@ def respond(message, chat_history, conv_messages, image_state, model=DEFAULT_MOD
     yield chat_history, conv_messages, image_state, render_tree(image_state), busy_input, stop_on
 
     try:
-        client = make_client()
+        client = make_client(_legacy_api_key() or "")
         gen = iter_agent(conv_messages, image_state, client, resolve_model(model))
         final = ""
         while True:
@@ -123,10 +163,24 @@ def respond(message, chat_history, conv_messages, image_state, model=DEFAULT_MOD
             except StopIteration as stop:
                 final, _produced, conv_messages = stop.value
                 break
-            yield chat_history, conv_messages, image_state, render_tree(snapshot), busy_input, stop_on
+            yield (
+                chat_history,
+                conv_messages,
+                image_state,
+                render_tree(snapshot),
+                busy_input,
+                stop_on,
+            )
     except Exception as e:
         chat_history.append({"role": "assistant", "content": f"❌ Error: {e}"})
-        yield chat_history, conv_messages, image_state, render_tree(image_state), idle_input, stop_off
+        yield (
+            chat_history,
+            conv_messages,
+            image_state,
+            render_tree(image_state),
+            idle_input,
+            stop_off,
+        )
         return
 
     chat_history.append({"role": "assistant", "content": final})
@@ -134,7 +188,14 @@ def respond(message, chat_history, conv_messages, image_state, model=DEFAULT_MOD
 
 
 def reset():
-    return ([], [], None, render_trail(None), gr.update(value=None, interactive=True), gr.update(interactive=False))
+    return (
+        [],
+        [],
+        None,
+        render_trail(None),
+        gr.update(value=None, interactive=True),
+        gr.update(interactive=False),
+    )
 
 
 def on_stop(chat_history):
@@ -153,8 +214,12 @@ def build_ui() -> gr.Blocks:
         model_choices, model_value = initial_model_dropdown()
         with gr.Row():
             model_dropdown = gr.Dropdown(
-                choices=model_choices, value=model_value, label="Vision model",
-                filterable=True, allow_custom_value=False, scale=4,
+                choices=model_choices,
+                value=model_value,
+                label="Vision model",
+                filterable=True,
+                allow_custom_value=False,
+                scale=4,
             )
             refresh_models_btn = gr.Button("↻ Refresh", scale=1)
         conv_messages = gr.State([])
@@ -163,8 +228,10 @@ def build_ui() -> gr.Blocks:
             with gr.Column(scale=1):
                 chatbot = gr.Chatbot(label="Conversation", height=560)
                 chat_input = gr.MultimodalTextbox(
-                    file_types=["image"], sources=["upload"],
-                    placeholder="Ask about the image…", show_label=False,
+                    file_types=["image"],
+                    sources=["upload"],
+                    placeholder="Ask about the image…",
+                    show_label=False,
                 )
                 with gr.Row():
                     stop_btn = gr.Button("⏹ Stop", variant="stop", scale=1, interactive=False)
@@ -183,7 +250,12 @@ def build_ui() -> gr.Blocks:
             outputs=outputs,
         )
         refresh_models_btn.click(refresh_model_dropdown, outputs=model_dropdown)
-        stop_btn.click(on_stop, inputs=[chatbot], outputs=[chatbot, chat_input, stop_btn], cancels=[submit_event])
+        stop_btn.click(
+            on_stop,
+            inputs=[chatbot],
+            outputs=[chatbot, chat_input, stop_btn],
+            cancels=[submit_event],
+        )
         reset_btn.click(reset, outputs=outputs)
     return demo
 

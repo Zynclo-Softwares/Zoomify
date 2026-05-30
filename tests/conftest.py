@@ -9,6 +9,26 @@ import pytest
 from PIL import Image, ImageDraw
 
 
+@pytest.fixture(autouse=True)
+def _isolate_server_env(monkeypatch):
+    """Tests should not inherit developer .env secrets or auth settings."""
+    monkeypatch.delenv("CLERK_JWKS_URL", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("BYOK_PRIVATE_KEY", raising=False)
+    monkeypatch.delenv("MONGODB_URI", raising=False)
+    monkeypatch.delenv("MONGODB_DATABASE", raising=False)
+    monkeypatch.delenv("STRIPE_WEBHOOK_SECRET", raising=False)
+    monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
+    monkeypatch.delenv("RATE_LIMIT_FREE_PER_MINUTE", raising=False)
+    monkeypatch.delenv("RATE_LIMIT_STARTER_PER_MINUTE", raising=False)
+    monkeypatch.delenv("RATE_LIMIT_PRO_PER_MINUTE", raising=False)
+    from zoomify import byok_crypto, clerk_auth
+
+    clerk_auth.reset_jwks_cache()
+    byok_crypto.reset_byok_cache()
+
+
 @pytest.fixture
 def small_img() -> Image.Image:
     """A small synthetic 'map' image so tests stay fast."""
@@ -24,10 +44,12 @@ def small_img() -> Image.Image:
 @pytest.fixture
 def state(small_img):
     from zoomify.tools import ImageState
+
     return ImageState.from_image(small_img, cols=8)
 
 
 # --------------------------------------------------------------- fake OpenAI
+
 
 def _tool_call(call_id: str, name: str, args: dict):
     return SimpleNamespace(
@@ -55,8 +77,7 @@ class ScriptedClient:
         idx = len(self.calls) - 1
         step = self.steps[idx] if idx < len(self.steps) else ("final", "done")
         if step[0] == "tools":
-            tcs = [_tool_call(f"c{idx}_{i}", nm, ar)
-                   for i, (nm, ar) in enumerate(step[1])]
+            tcs = [_tool_call(f"c{idx}_{i}", nm, ar) for i, (nm, ar) in enumerate(step[1])]
             msg = SimpleNamespace(content=None, tool_calls=tcs)
         else:
             msg = SimpleNamespace(content=step[1], tool_calls=None)
@@ -89,3 +110,37 @@ def scripted_client():
 @pytest.fixture
 def looping_client():
     return LoopingToolClient
+
+
+@pytest.fixture
+def client():
+    from zoomify.session import store
+
+    store.clear()
+    from server import app
+    from fastapi.testclient import TestClient
+
+    return TestClient(app)
+
+
+@pytest.fixture
+def byok_headers(monkeypatch):
+    from zoomify import byok_crypto
+
+    monkeypatch.delenv("BYOK_PRIVATE_KEY", raising=False)
+    byok_crypto.reset_byok_cache()
+    private_pem, public_pem = byok_crypto.generate_keypair_pem()
+    monkeypatch.setenv("BYOK_PRIVATE_KEY", private_pem)
+    byok_crypto.reset_byok_cache()
+    encrypted = byok_crypto.encrypt_api_key("sk-or-test", public_pem=public_pem)
+    return {byok_crypto.HEADER_NAME: encrypted}
+
+
+@pytest.fixture
+def small_png_bytes():
+    img = Image.new("RGB", (120, 80), "white")
+    import io
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()

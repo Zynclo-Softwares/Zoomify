@@ -49,9 +49,9 @@ def test_compute_geometry_partial_row_adds_extra_cell():
     # Must round UP to 6 so the bottom 20px partial strip is still selectable.
     ncols, nrows, cw, ch = gridder.compute_geometry(400, 270, cols=8)
     assert cw == ch == 50.0
-    assert nrows == 6                 # ceil(5.4), not round(5.4)==5
-    assert (nrows - 1) * ch < 270     # last row starts inside the image
-    assert nrows * ch >= 270          # and the grid now covers the whole height
+    assert nrows == 6  # ceil(5.4), not round(5.4)==5
+    assert (nrows - 1) * ch < 270  # last row starts inside the image
+    assert nrows * ch >= 270  # and the grid now covers the whole height
 
 
 def test_compute_geometry_by_cell_partial_cols_and_rows():

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from zoomify import gridder
-from zoomify.tools import ImageState, ZoomStep, encode_image, run_tool
+from zoomify.tools import ZoomStep, encode_image, run_tool
 
 
 # --------------------------------------------------------------- state setup
+
 
 def test_from_image_auto_grids_root(state):
     assert state.depth == 0
@@ -21,6 +22,7 @@ def test_current_and_meta_properties(state):
 
 
 # --------------------------------------------------------------- zoom / stack
+
 
 def test_zoom_pushes_step(state):
     res = run_tool("zoom", {"select": "2C"}, state)
@@ -74,6 +76,7 @@ def test_undo_then_different_zoom_replaces_tail(state):
 
 
 # --------------------------------------------------------------- navigation
+
 
 def test_undo_redo(state):
     run_tool("zoom", {"select": "2C"}, state)
@@ -133,6 +136,7 @@ def test_unknown_tool(state):
 
 # --------------------------------------------------------------- clamps
 
+
 def test_zoom_factor_clamped(state):
     res = run_tool("zoom", {"select": "2C", "zoom": 99}, state)
     assert state.path[-1].zoom == 8.0
@@ -157,6 +161,7 @@ def test_auto_regrid_cols_when_omitted(state):
 
 
 # --------------------------------------------------------------- encoding
+
 
 def test_encode_image_data_uri(small_img):
     uri = encode_image(small_img, max_side=200, fmt="PNG")

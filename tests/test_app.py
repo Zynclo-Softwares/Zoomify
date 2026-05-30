@@ -10,6 +10,7 @@ from zoomify.tools import ImageState, run_tool
 
 # --------------------------------------------------------------- trail render
 
+
 def test_render_trail_empty():
     out = render_trail(None)
     assert "Upload an image" in out
@@ -21,11 +22,11 @@ def test_render_trail_stack_and_current_marker(small_img):
     run_tool("zoom", {"select": "2C"}, state)
     run_tool("zoom", {"select": "1A"}, state)
     out = render_trail(state)
-    assert out.count('class="thumb"') == 3   # root + two zoom steps
-    assert "◀ current" in out
+    assert out.count('class="thumb"') == 3  # root + two zoom steps
+    assert "◀ current" not in out
     assert "crumb current" in out
-    assert 'id="zmodal"' in out
     assert "data-full=" in out
+    assert "data-cap=" in out
 
 
 def test_render_trail_collapses_on_undo(small_img):
@@ -38,6 +39,7 @@ def test_render_trail_collapses_on_undo(small_img):
 
 
 # --------------------------------------------------------------- _extract_image
+
 
 def test_extract_image_from_path(tmp_path, small_img):
     p = tmp_path / "map.png"
@@ -66,6 +68,7 @@ def test_extract_image_none():
 
 # --------------------------------------------------------------- reset
 
+
 def test_reset_shape():
     out = app.reset()
     assert len(out) == 6
@@ -77,6 +80,7 @@ def test_reset_shape():
 
 
 # --------------------------------------------------------------- respond
+
 
 def _png(tmp_path, img, name="map.png"):
     p = tmp_path / name
@@ -124,11 +128,13 @@ def test_initial_model_dropdown(monkeypatch):
 def test_respond_uses_selected_model(monkeypatch, tmp_path, small_img, scripted_client):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    client = scripted_client([
-        ("tools", [("zoom", {"select": "2C"})]),
-        ("final", "Here is the extracted info."),
-    ])
-    monkeypatch.setattr(app, "make_client", lambda: client)
+    client = scripted_client(
+        [
+            ("tools", [("zoom", {"select": "2C"})]),
+            ("final", "Here is the extracted info."),
+        ]
+    )
+    monkeypatch.setattr(app, "make_client", lambda _key="": client)
 
     msg = {"text": "what's here?", "files": [_png(tmp_path, small_img)]}
     chat, conv, state, tree, cleared, stop = _last(
@@ -148,12 +154,12 @@ def test_respond_followup_text_turn(monkeypatch, tmp_path, small_img, scripted_c
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     client1 = scripted_client([("final", "first answer")])
-    monkeypatch.setattr(app, "make_client", lambda: client1)
+    monkeypatch.setattr(app, "make_client", lambda _key="": client1)
     msg1 = {"text": "q1", "files": [_png(tmp_path, small_img)]}
     chat, conv, state, tree, _, _ = _last(app.respond(msg1, [], [], None))
 
     client2 = scripted_client([("final", "second answer")])
-    monkeypatch.setattr(app, "make_client", lambda: client2)
+    monkeypatch.setattr(app, "make_client", lambda _key="": client2)
     msg2 = {"text": "q2", "files": []}
     chat, conv, state, tree, _, _ = _last(app.respond(msg2, chat, conv, state))
 
@@ -165,11 +171,13 @@ def test_respond_followup_text_turn(monkeypatch, tmp_path, small_img, scripted_c
 def test_respond_locks_input_then_unlocks(monkeypatch, tmp_path, small_img, scripted_client):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    client = scripted_client([
-        ("tools", [("zoom", {"select": "2C"})]),
-        ("final", "done"),
-    ])
-    monkeypatch.setattr(app, "make_client", lambda: client)
+    client = scripted_client(
+        [
+            ("tools", [("zoom", {"select": "2C"})]),
+            ("final", "done"),
+        ]
+    )
+    monkeypatch.setattr(app, "make_client", lambda _key="": client)
 
     msg = {"text": "q", "files": [_png(tmp_path, small_img)]}
     updates = list(app.respond(msg, [], [], None))
@@ -191,12 +199,14 @@ def test_on_stop_restores_ui():
 def test_respond_streams_trail_updates(monkeypatch, tmp_path, small_img, scripted_client):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    client = scripted_client([
-        ("tools", [("zoom", {"select": "2C"})]),
-        ("tools", [("zoom", {"select": "1B"})]),
-        ("final", "done"),
-    ])
-    monkeypatch.setattr(app, "make_client", lambda: client)
+    client = scripted_client(
+        [
+            ("tools", [("zoom", {"select": "2C"})]),
+            ("tools", [("zoom", {"select": "1B"})]),
+            ("final", "done"),
+        ]
+    )
+    monkeypatch.setattr(app, "make_client", lambda _key="": client)
 
     msg = {"text": "q", "files": [_png(tmp_path, small_img)]}
     updates = list(app.respond(msg, [], [], None))
@@ -214,7 +224,9 @@ def test_respond_text_without_prior_image(monkeypatch):
 
 # --------------------------------------------------------------- build_ui
 
+
 def test_build_ui_smoke():
     import gradio as gr
+
     demo = app.build_ui()
     assert isinstance(demo, gr.Blocks)

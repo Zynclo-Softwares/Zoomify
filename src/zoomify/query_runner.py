@@ -9,7 +9,7 @@ from typing import Any
 from PIL import Image
 
 from .agent import SYSTEM_PROMPT, build_user_turn, iter_agent
-from .config import DEFAULT_MODEL, has_api_key, make_client
+from .config import DEFAULT_MODEL, make_client
 from .openrouter_models import resolve_model
 from .schema_registry import SchemaResolution, apply_schema_to_agent_config, resolve_schema
 from .session import Session
@@ -34,13 +34,17 @@ def run_query_stream(
     session: Session,
     query: str,
     image_bytes: bytes | None,
+    api_key: str,
     model: str | None = None,
     schema_param: str | None = None,
     structured: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """Yield SSE-style event dicts: trail, assistant, error, done."""
-    if not has_api_key():
-        yield {"type": "error", "message": "No API key found. Set OPENROUTER_API_KEY in .env."}
+    if not (api_key or "").strip():
+        yield {
+            "type": "error",
+            "message": "OpenRouter API key required. Add your encrypted key in the toolbar.",
+        }
         return
 
     query = (query or "").strip()
@@ -94,7 +98,7 @@ def run_query_stream(
     yield {"type": "trail", "html": render_trail(session.image_state)}
 
     try:
-        client = make_client()
+        client = make_client(api_key.strip())
         gen = iter_agent(session.conv_messages, session.image_state, client, selected_model)
         final = ""
         while True:

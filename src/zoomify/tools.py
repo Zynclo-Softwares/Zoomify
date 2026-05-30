@@ -41,6 +41,7 @@ def _estimate_regrid_cols(state: "ImageState", select: str, zoom: float) -> int:
 
 # --------------------------------------------------------------- stack state
 
+
 @dataclass(frozen=True)
 class ZoomStep:
     """One zoom operation relative to the view at its stack depth."""
@@ -86,7 +87,10 @@ class ImageState:
         if self._cached_len == len(self.path) and self._cached_gridded is not None:
             return
         gridded, meta, content = gridzoom.render_at_path(
-            self.original, self.root_meta, self.root_image, self.path,
+            self.original,
+            self.root_meta,
+            self.root_image,
+            self.path,
         )
         self._cached_gridded = gridded
         self._cached_meta = meta
@@ -122,7 +126,10 @@ class ImageState:
         """Gridded image at stack depth ``depth`` (0 = root)."""
         depth = max(0, min(depth, len(self.path)))
         gridded, _, _ = gridzoom.render_at_path(
-            self.original, self.root_meta, self.root_image, self.path[:depth],
+            self.original,
+            self.root_meta,
+            self.root_image,
+            self.path[:depth],
         )
         return gridded
 
@@ -134,6 +141,7 @@ class ImageState:
 
 
 # --------------------------------------------------------------- encoding
+
 
 def encode_image(img: Image.Image, max_side: int = 1536, fmt: str = "PNG") -> str:
     """Return a base64 data URI, downscaled for transport / thumbnails."""
@@ -182,15 +190,15 @@ TOOLS_SCHEMA = [
                         "minimum": 1,
                         "maximum": 8,
                         "description": "Upscale factor for the crop (default 3). "
-                                       "Use higher (4-6) for tiny fonts.",
+                        "Use higher (4-6) for tiny fonts.",
                     },
                     "regrid_cols": {
                         "type": "integer",
                         "minimum": 2,
                         "maximum": 30,
                         "description": "Columns for the fresh grid on the zoomed "
-                                       "crop. Omit to auto-pick from crop size "
-                                       "(~120px cells, similar to the parent view).",
+                        "crop. Omit to auto-pick from crop size "
+                        "(~120px cells, similar to the parent view).",
                     },
                 },
                 "required": ["select"],
@@ -226,8 +234,7 @@ TOOLS_SCHEMA = [
         "function": {
             "name": "restore",
             "description": (
-                "Clear the zoom stack and return to the ROOT (full auto-gridded "
-                "image)."
+                "Clear the zoom stack and return to the ROOT (full auto-gridded image)."
             ),
             "parameters": {"type": "object", "properties": {}},
         },
@@ -236,6 +243,7 @@ TOOLS_SCHEMA = [
 
 
 # --------------------------------------------------------------- dispatch
+
 
 @dataclass
 class ToolResult:
@@ -253,7 +261,9 @@ def run_tool(name: str, args: dict, state: ImageState) -> ToolResult:
     if name == "zoom":
         select = args.get("select")
         if not select:
-            return ToolResult(text="Missing 'select'. Provide cells/regions like '2C' or '1-3-B-E'.")
+            return ToolResult(
+                text="Missing 'select'. Provide cells/regions like '2C' or '1-3-B-E'."
+            )
         zoom = max(1.0, min(8.0, float(args.get("zoom", 3) or 3)))
 
         try:
@@ -282,8 +292,9 @@ def run_tool(name: str, args: dict, state: ImageState) -> ToolResult:
 
     if name == "undo":
         if not state.path:
-            return ToolResult(text=f"Already at the root; nothing to undo. {_pos(state)}",
-                              image=state.current)
+            return ToolResult(
+                text=f"Already at the root; nothing to undo. {_pos(state)}", image=state.current
+            )
         state._redo = state.path.pop()
         state._invalidate()
         label = state._redo.label
@@ -294,8 +305,7 @@ def run_tool(name: str, args: dict, state: ImageState) -> ToolResult:
 
     if name == "redo":
         if state._redo is None:
-            return ToolResult(text=f"No zoom step to redo. {_pos(state)}",
-                              image=state.current)
+            return ToolResult(text=f"No zoom step to redo. {_pos(state)}", image=state.current)
         step = state._redo
         state.path.append(step)
         state._redo = None

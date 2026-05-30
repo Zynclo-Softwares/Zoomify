@@ -1,4 +1,4 @@
-"""Fetch vision + tool-calling models from OpenRouter for the UI picker."""
+"""Fetch vision + tool-calling + structured-output models from OpenRouter."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from .config import OPENROUTER_BASE_URL, DEFAULT_MODEL
 # Used when the models API is unreachable or no key is configured yet.
 FALLBACK_VISION_MODELS: tuple[str, ...] = (
     "anthropic/claude-opus-4.8-fast",
-    "google/gemini-3.1-flash-lite",
     "google/gemini-2.5-flash",
     "openai/gpt-4o",
     "openai/gpt-4o-mini",
@@ -21,12 +20,18 @@ FALLBACK_VISION_MODELS: tuple[str, ...] = (
 _CACHE: list[str] | None = None
 
 
-def _is_vision_tool_model(entry: dict) -> bool:
+def _is_eligible_model(entry: dict) -> bool:
+    """Vision input, text output, tool calling, and strict structured JSON."""
     arch = entry.get("architecture") or {}
     inputs = arch.get("input_modalities") or []
     outputs = arch.get("output_modalities") or []
     params = entry.get("supported_parameters") or []
-    return "image" in inputs and "text" in outputs and "tools" in params
+    return (
+        "image" in inputs
+        and "text" in outputs
+        and "tools" in params
+        and "structured_outputs" in params
+    )
 
 
 def _http_get_json(url: str, api_key: str | None = None) -> dict:
@@ -38,26 +43,36 @@ def _http_get_json(url: str, api_key: str | None = None) -> dict:
 
 
 def fetch_vision_models(*, api_key: str | None = None, force_refresh: bool = False) -> list[str]:
-    """Return OpenRouter model IDs that accept images and support tool calling."""
+    """Return OpenRouter model IDs for vision, tools, and structured JSON output."""
     global _CACHE
     if _CACHE is not None and not force_refresh:
         return list(_CACHE)
 
     base = OPENROUTER_BASE_URL.rstrip("/")
     query = "output_modalities=all&supported_parameters=tools"
-    urls = [f"{base}/models/user?{query}", f"{base}/models?{query}"] if api_key else [f"{base}/models?{query}"]
+    urls = (
+        [f"{base}/models/user?{query}", f"{base}/models?{query}"]
+        if api_key
+        else [f"{base}/models?{query}"]
+    )
 
     last_error: Exception | None = None
     for url in urls:
         try:
             payload = _http_get_json(url, api_key)
             ids = sorted(
-                m["id"] for m in payload.get("data", []) if m.get("id") and _is_vision_tool_model(m)
+                m["id"] for m in payload.get("data", []) if m.get("id") and _is_eligible_model(m)
             )
             if ids:
                 _CACHE = ids
                 return list(ids)
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, KeyError) as e:
+        except (
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+            TimeoutError,
+            json.JSONDecodeError,
+            KeyError,
+        ) as e:
             last_error = e
             continue
 

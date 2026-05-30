@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from PIL import Image
 
-from zoomify import agent
 from zoomify.agent import (
     MAX_TOOL_ITERATIONS,
     build_user_turn,
@@ -19,6 +18,7 @@ def _img():
 
 
 # --------------------------------------------------------------- helpers
+
 
 def test_build_user_turn_text_only():
     turn = build_user_turn("hello", None)
@@ -37,16 +37,22 @@ def test_build_user_turn_with_image():
 def test_prune_old_images_keeps_recent():
     msgs = []
     for i in range(6):
-        msgs.append({
-            "role": "user",
-            "content": [
-                {"type": "text", "text": f"msg{i}"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,xx"}},
-            ],
-        })
+        msgs.append(
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": f"msg{i}"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,xx"}},
+                ],
+            }
+        )
     _prune_old_images(msgs, keep=2)
-    image_msgs = [m for m in msgs if isinstance(m.get("content"), list)
-                  and any(p.get("type") == "image_url" for p in m["content"])]
+    image_msgs = [
+        m
+        for m in msgs
+        if isinstance(m.get("content"), list)
+        and any(p.get("type") == "image_url" for p in m["content"])
+    ]
     assert len(image_msgs) == 2
     # older ones became text placeholders
     assert isinstance(msgs[0]["content"], str)
@@ -55,6 +61,7 @@ def test_prune_old_images_keeps_recent():
 
 
 # --------------------------------------------------------------- run_agent
+
 
 def test_run_agent_returns_final_without_tools(scripted_client):
     client = scripted_client([("final", "the answer")])
@@ -68,10 +75,12 @@ def test_run_agent_returns_final_without_tools(scripted_client):
 
 
 def test_run_agent_executes_tool_then_answers(scripted_client):
-    client = scripted_client([
-        ("tools", [("zoom", {"select": "2C"})]),
-        ("final", "done reading"),
-    ])
+    client = scripted_client(
+        [
+            ("tools", [("zoom", {"select": "2C"})]),
+            ("final", "done reading"),
+        ]
+    )
     state = ImageState.from_image(_img(), cols=6)
     msgs = [{"role": "system", "content": "sys"}, build_user_turn("q", state.current)]
     final, produced, out = run_agent(msgs, state, client=client)
@@ -83,9 +92,12 @@ def test_run_agent_executes_tool_then_answers(scripted_client):
     assert roles[0] == "system"
     assert "tool" in roles
     # a follow-up user message carries the produced image
-    assert any(m["role"] == "user" and isinstance(m["content"], list)
-               and any(p.get("type") == "image_url" for p in m["content"])
-               for m in out[2:])
+    assert any(
+        m["role"] == "user"
+        and isinstance(m["content"], list)
+        and any(p.get("type") == "image_url" for p in m["content"])
+        for m in out[2:]
+    )
 
 
 def test_run_agent_max_iterations_fallback(looping_client):
@@ -99,10 +111,12 @@ def test_run_agent_max_iterations_fallback(looping_client):
 
 def test_run_agent_handles_bad_tool_arguments(scripted_client):
     # zoom with a bad selection -> tool returns an error string, loop continues
-    client = scripted_client([
-        ("tools", [("zoom", {"select": "zz"})]),
-        ("final", "couldn't read"),
-    ])
+    client = scripted_client(
+        [
+            ("tools", [("zoom", {"select": "zz"})]),
+            ("final", "couldn't read"),
+        ]
+    )
     state = ImageState.from_image(_img(), cols=6)
     msgs = [{"role": "system", "content": "sys"}, build_user_turn("q", state.current)]
     final, produced, out = run_agent(msgs, state, client=client)
@@ -115,11 +129,13 @@ def test_run_agent_handles_bad_tool_arguments(scripted_client):
 def test_iter_agent_yields_state_per_tool_round(scripted_client):
     from zoomify.agent import iter_agent
 
-    client = scripted_client([
-        ("tools", [("zoom", {"select": "2C"})]),
-        ("tools", [("zoom", {"select": "1B"})]),
-        ("final", "done"),
-    ])
+    client = scripted_client(
+        [
+            ("tools", [("zoom", {"select": "2C"})]),
+            ("tools", [("zoom", {"select": "1B"})]),
+            ("final", "done"),
+        ]
+    )
     state = ImageState.from_image(_img(), cols=6)
     msgs = [{"role": "system", "content": "sys"}, build_user_turn("q", state.current)]
 
@@ -142,4 +158,5 @@ def test_keep_recent_image_msgs_is_one():
     """Only the current image should remain in context; the model must navigate
     (undo/redo/restore) to revisit earlier checkpoints."""
     from zoomify.agent import KEEP_RECENT_IMAGE_MSGS
+
     assert KEEP_RECENT_IMAGE_MSGS == 1

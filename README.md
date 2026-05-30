@@ -1,6 +1,8 @@
-# 🔆 Zoomify — Image Detail Extraction Agent
-
-**Vision LLMs are bad at reading whole images when the detail matters.**
+<div align="center">
+  <img src="frontend/public/zoomify-logo.png" alt="Zoomify logo" width="88" />
+  <h1>Zoomify — Image Detail Extraction Agent</h1>
+  <p><strong>Vision LLMs are bad at reading whole images when the detail matters.</strong></p>
+</div>
 
 Send a blueprint, site map, engineering diagram, long desktop screenshot, dense
 dashboard, or any large info graphic to GPT-4o (or similar) in one shot and it
@@ -11,7 +13,7 @@ it does not naturally pan, magnify, and re-read the way a human would with a
 PDF viewer.
 
 **Zoomify is a helper agent for exactly that.** Upload the image, ask a question,
-and an OpenAI vision model navigates a **labeled grid** — cropping, upscaling,
+and a vision model navigates a **labeled grid** — cropping, upscaling,
 and re-gridding regions until it can read the small print. It works like a
 human using zoom on a site plan or SLD: start at the overview, drill into the
 cells that matter, back out and retry if the wrong area was picked.
@@ -25,10 +27,10 @@ normally fail on**:
 - **Long scrolling captures** — chat logs, tables, multi-panel UIs
 - **Posters, scans, and dense infographics** — mixed font sizes on one canvas
 
-Zoomify is a **Gradio app** plus a small **grid + zoom tool library** you can
-reuse in your own pipelines. The agent auto-grids the upload, walks a **zoom
-stack** (breadcrumb path), and answers from what it actually read — not from a
-blurry first glance.
+The **primary app** is a **React UI** backed by **FastAPI**. You bring your own
+**OpenRouter API key** (encrypted in the browser; decrypted only on the server).
+Platform usage on `POST /api/query` is metered by subscription tier. A legacy
+**Gradio** UI (`app.py`) remains for quick experiments.
 
 ## Tools
 
@@ -50,18 +52,28 @@ files: `src/zoomify/gridder.py` (grid overlay) and `src/zoomify/gridzoom.py`
 
 ```
 Zoomify/
-├── pyproject.toml          # uv project
-├── .env.example            # OPENROUTER_API_KEY
-├── app.py                  # Legacy Gradio UI
-├── server.py               # FastAPI + React (primary)
-├── frontend/               # React UI (Vite)
-├── "Example Files"/         # sample images (Aviva electrical SLD, etc.)
-└── src/zoomify/
-    ├── gridder.py          # grid engine: auto-grid + re-grid primitives
-    ├── gridzoom.py         # crop + zoom + re-grid
-    ├── tools.py            # tool schemas, history-stack image state, dispatch
-    └── agent.py            # OpenAI vision + tool-calling loop
-└── tests/                  # pytest suite (gridder/gridzoom/tools/agent/app)
+├── pyproject.toml              # uv project
+├── .env.example                # BYOK, Clerk, MongoDB, Stripe
+├── Makefile                    # install, backend, frontend, make dev
+├── server.py                   # FastAPI + React (primary)
+├── app.py                      # Legacy Gradio UI
+├── frontend/                   # React UI (Vite)
+├── terraform/                  # Stripe products, prices, payment links
+├── "Example Files"/            # sample images (Aviva electrical SLD, etc.)
+├── src/zoomify/
+│   ├── agent.py                # vision + tool-calling loop
+│   ├── billing.py              # quotas, plan enforcement
+│   ├── byok_crypto.py          # client-side key encryption (RSA)
+│   ├── clerk_auth.py           # JWT verification
+│   ├── db.py                   # MongoDB or in-memory user store
+│   ├── gridder.py              # auto-grid + re-grid primitives
+│   ├── gridzoom.py             # crop + zoom + re-grid
+│   ├── plans.py                # Free / Starter / Pro tiers
+│   ├── query_runner.py         # streaming query orchestration
+│   ├── stripe_webhook.py       # subscription lifecycle
+│   ├── tools.py                # tool schemas, stack state, dispatch
+│   └── trail.py                # zoom trail HTML for the UI
+└── tests/                      # pytest (grid, agent, API, billing, BYOK, auth)
 ```
 
 ## Setup (uv)
@@ -70,31 +82,39 @@ Install [`uv`](https://docs.astral.sh/uv/) (`brew install uv` or
 `curl -LsSf https://astral.sh/uv/install.sh | sh`), then:
 
 ```bash
-uv sync                     # creates .venv/ and installs dependencies
-cp .env.example .env        # then edit .env and add your OPENROUTER_API_KEY
+make install                    # uv sync --dev + bun install in frontend/
+cp .env.example .env            # then edit — see Configuration below
+```
+
+Generate a BYOK keypair once (paste the private PEM into `.env` as `BYOK_PRIVATE_KEY`):
+
+```bash
+uv run python -c "from zoomify.byok_crypto import generate_keypair_pem; p,u=generate_keypair_pem(); print(p)"
 ```
 
 ## Run
 
-### React + FastAPI (recommended)
+### Local development (recommended)
 
 ```bash
-cd frontend && npm install && npm run build && cd ..
-uv run uvicorn server:app --reload --host 127.0.0.1 --port 8000
+make dev
+```
+
+Starts the FastAPI backend (`http://127.0.0.1:8000`), the Vite dev server
+(`http://127.0.0.1:5173`, proxies `/api`), and — if the [Stripe CLI](https://stripe.com/docs/stripe-cli)
+is installed — forwards webhooks to `/api/billing/webhook`.
+
+Open **http://127.0.0.1:5173** for the UI. Enter your OpenRouter key on first use;
+it is encrypted with the server public key and stored locally.
+
+### Production-style (single server)
+
+```bash
+cd frontend && bun run build && cd ..
+uv run uvicorn server:app --host 127.0.0.1 --port 8000
 ```
 
 Open http://127.0.0.1:8000 — chat on the left, zoom trail on the right.
-
-**API:** `POST /api/query` (multipart: `query`, optional `image`, `model`, `schema`, `structured`, `session_id`) streams NDJSON events (`trail`, `assistant`, `done`).
-
-Business schemas: tag images with metadata `structure-zoomify:<id>` (e.g. `acme-sld-v1`) or pass `schema` in the request. Structured LLM output is a **placeholder** for now; see `src/zoomify/schema_registry.py`.
-
-Dev UI with hot reload:
-
-```bash
-uv run uvicorn server:app --reload --port 8000   # terminal 1
-cd frontend && npm run dev                        # terminal 2 → :5173 proxies /api
-```
 
 ### Legacy Gradio
 
@@ -102,16 +122,48 @@ cd frontend && npm run dev                        # terminal 2 → :5173 proxies
 uv run python app.py
 ```
 
-> *Read the footer of this screenshot and list every link and status message.*
+## API
 
-or, for a site-map:
+Interactive docs: **http://127.0.0.1:8000/api/docs** (ReDoc at `/api/redoc`).
 
-> *What is the total DC capacity and how many inverters are shown? Zoom into the
-> legend to read the labels.*
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/health` | Service status (BYOK, Clerk, MongoDB, Stripe flags) |
+| `GET` | `/api/byok/public-key` | RSA public key for client-side key encryption |
+| `GET` | `/api/auth/me` | Signed-in user (Clerk JWT; dev bypass when Clerk unset) |
+| `GET` | `/api/models` | Vision models (requires encrypted OpenRouter key header) |
+| `POST` | `/api/query` | Stream extraction (multipart; metered by plan) |
+| `DELETE` | `/api/session/{id}` | Clear server-side session state |
+| `GET` | `/api/billing/plans` | Plan catalog + Stripe Payment Link URLs |
+| `GET` | `/api/billing/status` | Current plan and daily usage |
+| `POST` | `/api/billing/webhook` | Stripe subscription events |
 
-A one-click **example** (the Aviva electrical single-line diagram) is provided
-for free experimentation in Gradio. The **right** panel shows the zoom **trail**
-(breadcrumb stack). **Click any thumbnail** to preview; close with **✕**.
+**Query stream:** `POST /api/query` accepts multipart fields `query`, optional
+`image`, `model`, `schema`, `structured`, `session_id`. Responses are NDJSON
+events (`session`, `trail`, `assistant`, `schema`, `error`, `done`).
+
+**BYOK header:** `X-Encrypted-Api-Key` — RSA-OAEP encrypted OpenRouter key from
+the browser. The server never stores your OpenRouter key.
+
+**Business schemas:** tag images with metadata `structure-zoomify:<id>` (e.g.
+`acme-sld-v1`) or pass `schema` in the request. See `src/zoomify/schema_registry.py`.
+
+## Plans & billing
+
+Zoomify is **BYOK** — you pay OpenRouter for model usage; Zoomify bills for
+platform extractions on our server layer:
+
+| Plan | Daily extractions | Price |
+|------|-------------------|-------|
+| **Free** | 50 | $0 |
+| **Starter** | 500 | $10/mo |
+| **Pro** | Unlimited* | $25/mo |
+
+\*Fair-use rate limits apply on Pro.
+
+Stripe Payment Links and webhooks are provisioned with Terraform — see
+[`terraform/README.md`](terraform/README.md). For local webhook testing, copy the
+`whsec_…` secret from `stripe listen` into `STRIPE_WEBHOOK_SECRET` in `.env`.
 
 ## How it works
 
@@ -132,26 +184,36 @@ navigates, the right-hand trail updates **live**, collapsing when steps are popp
 
 ## Configuration
 
-Set in `.env`:
+Set in `.env` (see `.env.example`):
 
-- `OPENROUTER_API_KEY` — your [OpenRouter](https://openrouter.ai/) key (preferred).
-- `OPENROUTER_BASE_URL` — optional override (default `https://openrouter.ai/api/v1`).
-- `OPENAI_API_KEY` — fallback when not using OpenRouter.
+| Variable | Purpose |
+|----------|---------|
+| `BYOK_PRIVATE_KEY` | RSA private PEM — decrypts encrypted OpenRouter keys from clients |
+| `CLERK_JWKS_URL` | Clerk JWT verification; omit for local dev bypass |
+| `MONGODB_URI` | Optional MongoDB connection string; in-memory store when unset |
+| `MONGODB_DATABASE` | MongoDB database name (default `Zoomify`; use e.g. `Zoomify-Prod` in production) |
+| `STRIPE_LINK_*` | Payment Link URLs (Starter/Pro, monthly/yearly) |
+| `STRIPE_SECRET_KEY` | Stripe API key for webhook verification |
+| `STRIPE_WEBHOOK_SECRET` | Webhook signing secret (`stripe listen` locally) |
+| `OPENROUTER_BASE_URL` | Optional override (default `https://openrouter.ai/api/v1`) |
 
 Pick the **vision model** in the app dropdown (models are fetched from OpenRouter and
-filtered to image + tool-calling capable). Default selection is `anthropic/claude-opus-4.8-fast`.
+filtered to image + tool-calling capable). Default selection is
+`anthropic/claude-opus-4.8-fast`.
 
 ## Tests
 
-The image tools, agent loop, FastAPI routes, and Gradio handlers are covered by pytest:
+Grid tools, agent loop, FastAPI routes, billing, BYOK crypto, and Clerk auth are
+covered by pytest:
 
 ```bash
-uv sync --group dev                                # install pytest + pytest-cov
-uv run python -m pytest                            # run the suite
-uv run python -m pytest --cov=zoomify --cov=app    # with coverage
+uv sync --group dev
+uv run python -m pytest
+uv run python -m pytest --cov=zoomify --cov=server
 ```
 
-No API key is required — the agent tests drive a scripted fake OpenAI client.
+No OpenRouter API key is required — agent tests use a scripted fake client. Stripe
+env vars are cleared in test fixtures so local `.env` secrets do not affect CI.
 
 ## License
 
