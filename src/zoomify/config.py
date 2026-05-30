@@ -6,11 +6,7 @@ import os
 
 from openai import OpenAI
 
-DEFAULT_MODEL = (
-    os.environ.get("LLM_MODEL")
-    or os.environ.get("OPENAI_MODEL")
-    or "google/gemini-3.1-flash-lite"
-)
+DEFAULT_MODEL = "anthropic/claude-opus-4.8-fast"
 OPENROUTER_BASE_URL = os.environ.get(
     "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1",
 )

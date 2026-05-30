@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import app
+from zoomify.config import DEFAULT_MODEL
 from zoomify.tools import ImageState, run_tool
 
 
@@ -109,7 +110,17 @@ def test_respond_rejects_non_image(monkeypatch, tmp_path):
     assert state is None
 
 
-def test_respond_first_image_turn(monkeypatch, tmp_path, small_img, scripted_client):
+def test_initial_model_dropdown(monkeypatch):
+    monkeypatch.setattr(
+        "app.model_dropdown_update",
+        lambda **_: {"choices": ["alpha/model", DEFAULT_MODEL], "value": DEFAULT_MODEL},
+    )
+    choices, value = app.initial_model_dropdown()
+    assert value == DEFAULT_MODEL
+    assert "alpha/model" in choices
+
+
+def test_respond_uses_selected_model(monkeypatch, tmp_path, small_img, scripted_client):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     client = scripted_client([
@@ -119,8 +130,11 @@ def test_respond_first_image_turn(monkeypatch, tmp_path, small_img, scripted_cli
     monkeypatch.setattr(app, "make_client", lambda: client)
 
     msg = {"text": "what's here?", "files": [_png(tmp_path, small_img)]}
-    chat, conv, state, tree, cleared, stop = _last(app.respond(msg, [], [], None))
+    chat, conv, state, tree, cleared, stop = _last(
+        app.respond(msg, [], [], None, "alpha/model"),
+    )
 
+    assert client.calls[0]["model"] == "alpha/model"
     assert isinstance(state, ImageState)
     assert state.depth == 1
     assert chat[-1]["role"] == "assistant"

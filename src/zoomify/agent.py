@@ -21,7 +21,7 @@ from PIL import Image
 from .config import DEFAULT_MODEL, make_client
 from .tools import ImageState, ToolResult, TOOLS_SCHEMA, encode_image, run_tool
 
-MAX_TOOL_ITERATIONS = 10
+MAX_TOOL_ITERATIONS = 50
 # Keep only the most recent N image-bearing messages in the running
 # conversation; older images are replaced with a text placeholder. We keep
 # exactly ONE so the model sees a single image at a time (the current pointer)

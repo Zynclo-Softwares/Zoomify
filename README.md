@@ -51,7 +51,7 @@ files: `src/zoomify/gridder.py` (grid overlay) and `src/zoomify/gridzoom.py`
 ```
 Zoomify/
 ├── pyproject.toml          # uv project
-├── .env.example            # OPENROUTER_API_KEY, LLM_MODEL
+├── .env.example            # OPENROUTER_API_KEY
 ├── app.py                  # Gradio entrypoint
 ├── "Example Files"/         # sample images (Aviva electrical SLD, etc.)
 └── src/zoomify/
@@ -118,9 +118,11 @@ navigates, the right-hand trail updates **live**, collapsing when steps are popp
 Set in `.env`:
 
 - `OPENROUTER_API_KEY` — your [OpenRouter](https://openrouter.ai/) key (preferred).
-- `LLM_MODEL` — vision + tool-calling model (default `google/gemini-3.1-flash-lite`).
 - `OPENROUTER_BASE_URL` — optional override (default `https://openrouter.ai/api/v1`).
-- `OPENAI_API_KEY` / `OPENAI_MODEL` — fallback when not using OpenRouter.
+- `OPENAI_API_KEY` — fallback when not using OpenRouter.
+
+Pick the **vision model** in the app dropdown (models are fetched from OpenRouter and
+filtered to image + tool-calling capable). Default selection is `anthropic/claude-opus-4.8-fast`.
 
 ## Tests
 

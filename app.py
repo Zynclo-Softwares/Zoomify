@@ -26,7 +26,8 @@ from dotenv import load_dotenv
 from PIL import Image
 
 from zoomify.agent import SYSTEM_PROMPT, build_user_turn, iter_agent
-from zoomify.config import DEFAULT_MODEL, has_api_key, make_client
+from zoomify.config import DEFAULT_MODEL, api_key, has_api_key, make_client
+from zoomify.openrouter_models import model_dropdown_update, resolve_model
 from zoomify.tools import ImageState, encode_image
 
 load_dotenv()
@@ -37,6 +38,18 @@ DEFAULT_PROMPT = "Extract the key information from this image; zoom in to read a
 
 def _has_key() -> bool:
     return has_api_key()
+
+
+def initial_model_dropdown() -> tuple[list[str], str]:
+    """Return (choices, value) for constructing the Dropdown at build time."""
+    upd = model_dropdown_update(api_key=api_key())
+    return upd["choices"], upd["value"]
+
+
+def refresh_model_dropdown():
+    """Reload models from OpenRouter into the dropdown."""
+    upd = model_dropdown_update(api_key=api_key(), force_refresh=True)
+    return gr.update(choices=upd["choices"], value=upd["value"])
 
 
 # --------------------------------------------------------------- trail render
@@ -146,7 +159,7 @@ def _extract_image(files) -> Image.Image | None:
 
 # --------------------------------------------------------------- main handler
 
-def respond(message, chat_history, conv_messages, image_state):
+def respond(message, chat_history, conv_messages, image_state, model=DEFAULT_MODEL):
     """Streaming handler: yields UI updates so the zoom-tree pointer can be
     watched moving through the tree in real time as the agent navigates.
 
@@ -222,8 +235,8 @@ def respond(message, chat_history, conv_messages, image_state):
 
     try:
         client = make_client()
-        model = DEFAULT_MODEL
-        gen = iter_agent(conv_messages, image_state, client, model)
+        selected = resolve_model(model)
+        gen = iter_agent(conv_messages, image_state, client, selected)
         final = ""
         while True:
             try:
@@ -268,9 +281,20 @@ def build_ui() -> gr.Blocks:
             "fonts** or small details. The image is auto-gridded, then the agent **zooms** into "
             "cells (with **undo / redo / restore**) to read the detail. The right panel shows the "
             "zoom **trail** (breadcrumb stack).\n\n"
-            f"**Model:** `{DEFAULT_MODEL}` "
-            f"· {'✅ API key detected' if _has_key() else '⚠️ set OPENROUTER_API_KEY in .env'}"
+            f"{'✅ API key detected' if _has_key() else '⚠️ set OPENROUTER_API_KEY in .env'}"
         )
+
+        model_choices, model_value = initial_model_dropdown()
+        with gr.Row():
+            model_dropdown = gr.Dropdown(
+                choices=model_choices,
+                value=model_value,
+                label="Vision model",
+                filterable=True,
+                allow_custom_value=False,
+                scale=4,
+            )
+            refresh_models_btn = gr.Button("↻ Refresh", scale=1)
 
         conv_messages = gr.State([])
         image_state = gr.State(None)
@@ -298,9 +322,10 @@ def build_ui() -> gr.Blocks:
         outputs = [chatbot, conv_messages, image_state, tree, chat_input, stop_btn]
         submit_event = chat_input.submit(
             respond,
-            inputs=[chat_input, chatbot, conv_messages, image_state],
+            inputs=[chat_input, chatbot, conv_messages, image_state, model_dropdown],
             outputs=outputs,
         )
+        refresh_models_btn.click(refresh_model_dropdown, outputs=model_dropdown)
         # Stop cancels the running agent generator, then restores the UI.
         stop_btn.click(
             on_stop,
