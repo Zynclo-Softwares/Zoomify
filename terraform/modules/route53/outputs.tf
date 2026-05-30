@@ -7,3 +7,8 @@ output "record_count" {
   description = "Number of CNAME records created/updated."
   value       = length(aws_route53_record.cname)
 }
+
+output "txt_record_names" {
+  description = "TXT record names managed in Route 53."
+  value       = sort(keys(aws_route53_record.txt))
+}
