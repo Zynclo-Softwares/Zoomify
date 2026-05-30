@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import app
 from zoomify.config import DEFAULT_MODEL
+from zoomify.trail import render_trail
 from zoomify.tools import ImageState, run_tool
 
 
 # --------------------------------------------------------------- trail render
 
 def test_render_trail_empty():
-    out = app.render_trail(None)
+    out = render_trail(None)
     assert "Upload an image" in out
     assert "<style>" in out
 
@@ -19,7 +20,7 @@ def test_render_trail_stack_and_current_marker(small_img):
     state = ImageState.from_image(small_img, cols=6)
     run_tool("zoom", {"select": "2C"}, state)
     run_tool("zoom", {"select": "1A"}, state)
-    out = app.render_trail(state)
+    out = render_trail(state)
     assert out.count('class="thumb"') == 3   # root + two zoom steps
     assert "◀ current" in out
     assert "crumb current" in out
@@ -32,7 +33,7 @@ def test_render_trail_collapses_on_undo(small_img):
     run_tool("zoom", {"select": "2C"}, state)
     run_tool("zoom", {"select": "1A"}, state)
     run_tool("undo", {}, state)
-    out = app.render_trail(state)
+    out = render_trail(state)
     assert out.count('class="thumb"') == 2
 
 

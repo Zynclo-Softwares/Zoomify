@@ -52,7 +52,9 @@ files: `src/zoomify/gridder.py` (grid overlay) and `src/zoomify/gridzoom.py`
 Zoomify/
 ├── pyproject.toml          # uv project
 ├── .env.example            # OPENROUTER_API_KEY
-├── app.py                  # Gradio entrypoint
+├── app.py                  # Legacy Gradio UI
+├── server.py               # FastAPI + React (primary)
+├── frontend/               # React UI (Vite)
 ├── "Example Files"/         # sample images (Aviva electrical SLD, etc.)
 └── src/zoomify/
     ├── gridder.py          # grid engine: auto-grid + re-grid primitives
@@ -74,11 +76,31 @@ cp .env.example .env        # then edit .env and add your OPENROUTER_API_KEY
 
 ## Run
 
+### React + FastAPI (recommended)
+
+```bash
+cd frontend && npm install && npm run build && cd ..
+uv run uvicorn server:app --reload --host 127.0.0.1 --port 8000
+```
+
+Open http://127.0.0.1:8000 — chat on the left, zoom trail on the right.
+
+**API:** `POST /api/query` (multipart: `query`, optional `image`, `model`, `schema`, `structured`, `session_id`) streams NDJSON events (`trail`, `assistant`, `done`).
+
+Business schemas: tag images with metadata `structure-zoomify:<id>` (e.g. `acme-sld-v1`) or pass `schema` in the request. Structured LLM output is a **placeholder** for now; see `src/zoomify/schema_registry.py`.
+
+Dev UI with hot reload:
+
+```bash
+uv run uvicorn server:app --reload --port 8000   # terminal 1
+cd frontend && npm run dev                        # terminal 2 → :5173 proxies /api
+```
+
+### Legacy Gradio
+
 ```bash
 uv run python app.py
 ```
-Open the printed local URL. On the **left** is the chat: use the **+** button to
-attach an image (images only) and **Send** your prompt — for example:
 
 > *Read the footer of this screenshot and list every link and status message.*
 
@@ -88,13 +110,8 @@ or, for a site-map:
 > legend to read the labels.*
 
 A one-click **example** (the Aviva electrical single-line diagram) is provided
-for free experimentation. The
-**right** panel shows the zoom **trail** (breadcrumb stack) — root plus each
-zoom step, with the current level highlighted `◀ current`. **Click any thumbnail**
-to open a larger image preview; close it with the **✕** button (or by clicking
-outside the image). While the agent is working the input is **locked** and a
-**⏹ Stop** button appears — click it to cancel the in-flight run and re-enable
-input.
+for free experimentation in Gradio. The **right** panel shows the zoom **trail**
+(breadcrumb stack). **Click any thumbnail** to preview; close with **✕**.
 
 ## How it works
 
@@ -126,8 +143,7 @@ filtered to image + tool-calling capable). Default selection is `anthropic/claud
 
 ## Tests
 
-The image tools, the agent loop (mocked OpenAI client) and the Gradio handlers
-are covered by a pytest suite:
+The image tools, agent loop, FastAPI routes, and Gradio handlers are covered by pytest:
 
 ```bash
 uv sync --group dev                                # install pytest + pytest-cov

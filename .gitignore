@@ -4,7 +4,7 @@ __pycache__/
 .venv/
 *.egg-info/
 build/
-dist/
+/dist/
 
 # uv
 # (uv.lock IS committed; the cache is not)
@@ -22,3 +22,6 @@ Example Files/
 # runtime output
 output/
 .coverage
+
+# frontend
+frontend/node_modules/

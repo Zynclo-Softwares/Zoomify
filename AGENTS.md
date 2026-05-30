@@ -57,9 +57,11 @@ Every change goes through **one issue → one patch branch → one PR**.
 
 ## Repo notes for agents
 
-- Package lives under `src/zoomify/`; Gradio entrypoint is `app.py`
+- Package lives under `src/zoomify/`; legacy Gradio entrypoint is `app.py`
+- **Primary UI:** React (`frontend/`) + FastAPI (`server.py`) — `uv run uvicorn server:app`
 - Session state is a **zoom stack** (`ImageState.path`); views render from `original + path`
 - Grid drawing: `src/zoomify/gridder.py`; zoom/crop/path: `src/zoomify/gridzoom.py`
+- Business schemas: `src/zoomify/schema_registry.py` (placeholder; metadata key `structure-zoomify`)
 - `.vscode/` and `Example Files/` are gitignored — do not commit them
 - License: MIT — keep copyright and credit to **Zynclo Softwares**
 
