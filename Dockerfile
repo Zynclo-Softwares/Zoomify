@@ -81,6 +81,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000 \
     AUTO_CREATE_INDEXES_ON_BOOT=false
 
+# Grid labels use DejaVu Sans Bold (see gridder.load_font); slim base has no fonts.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system --gid 1001 zoomify \
     && useradd --system --uid 1001 --gid zoomify --home-dir /app --shell /usr/sbin/nologin zoomify
 
