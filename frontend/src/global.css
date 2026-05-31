@@ -32,6 +32,12 @@ body {
 	background: var(--bg);
 }
 
+#root:has(.app) {
+	height: 100dvh;
+	max-height: 100dvh;
+	overflow: hidden;
+}
+
 .page-loading {
 	display: grid;
 	place-items: center;
