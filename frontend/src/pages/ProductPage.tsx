@@ -1,31 +1,42 @@
-import { Show, useAuth } from "@clerk/react";
-import { useEffect } from "react";
+import { useAuth } from "@clerk/react";
+import { lazy, Suspense, useEffect } from "react";
 import { Navigate } from "react-router-dom";
-import App from "../App";
 import { isClerkConfigured, setAuthTokenGetter } from "../auth";
+import PageLoading from "../components/PageLoading";
+
+const App = lazy(() => import("../App"));
 
 function AuthenticatedProduct() {
-	const { getToken } = useAuth();
+	const { isLoaded, isSignedIn, getToken } = useAuth();
 
 	useEffect(() => {
-		setAuthTokenGetter(() => getToken());
-	}, [getToken]);
+		if (isSignedIn) {
+			setAuthTokenGetter(() => getToken());
+		}
+	}, [getToken, isSignedIn]);
+
+	if (!isLoaded) {
+		return <PageLoading label="Checking session…" />;
+	}
+
+	if (!isSignedIn) {
+		return <Navigate to="/sign-in" replace />;
+	}
 
 	return (
-		<>
-			<Show when="signed-in">
-				<App />
-			</Show>
-			<Show when="signed-out">
-				<Navigate to="/sign-in" replace />
-			</Show>
-		</>
+		<Suspense fallback={<PageLoading label="Loading Zoomify…" />}>
+			<App />
+		</Suspense>
 	);
 }
 
 export default function ProductPage() {
 	if (!isClerkConfigured()) {
-		return <App />;
+		return (
+			<Suspense fallback={<PageLoading label="Loading Zoomify…" />}>
+				<App />
+			</Suspense>
+		);
 	}
 
 	return <AuthenticatedProduct />;

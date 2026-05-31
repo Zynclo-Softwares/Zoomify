@@ -1,12 +1,9 @@
 .subscription-banner {
 	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 1rem;
-	flex-wrap: wrap;
-	padding: 0.75rem 1rem;
-	margin-top: 0.5rem;
-	margin-bottom: 0.85rem;
+	flex-direction: column;
+	gap: 0.6rem;
+	padding: 0.65rem 0.85rem;
+	margin: 0;
 	border: 1px solid rgba(99, 102, 241, 0.35);
 	background: linear-gradient(
 		135deg,
@@ -34,34 +31,48 @@
 	);
 }
 
+.subscription-plan-row {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 0.65rem;
+}
+
 .subscription-main {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	min-width: 0;
+	flex: 1;
+}
+
+.subscription-plan-line {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: baseline;
-	gap: 0.35rem 0.75rem;
+	gap: 0.35rem 0.65rem;
 }
 
 .subscription-label {
-	font-size: 0.7rem;
+	font-size: 0.68rem;
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
 	color: #a5b4fc;
-	width: 100%;
 }
 
 .subscription-plan {
-	font-size: 0.95rem;
+	font-size: 0.92rem;
 	color: #f1f5f9;
 }
 
 .subscription-usage {
-	font-size: 0.8rem;
+	font-size: 0.78rem;
 	color: #c7d2fe;
 }
 
 .subscription-status {
-	font-size: 0.7rem;
-	padding: 0.15rem 0.45rem;
+	font-size: 0.68rem;
+	padding: 0.12rem 0.4rem;
 	border-radius: 999px;
 	background: rgba(34, 197, 94, 0.15);
 	color: #86efac;
@@ -71,13 +82,14 @@
 .subscription-upgrade {
 	display: inline-flex;
 	align-items: center;
-	padding: 0.45rem 0.85rem;
-	border-radius: 10px;
+	flex-shrink: 0;
+	padding: 0.38rem 0.7rem;
+	border-radius: 8px;
 	background: linear-gradient(135deg, #3b82f6, #0055ff);
 	color: #fff;
 	text-decoration: none;
 	font-weight: 600;
-	font-size: 0.82rem;
+	font-size: 0.78rem;
 	white-space: nowrap;
 }
 
@@ -89,69 +101,75 @@
 .subscription-api-key {
 	display: flex;
 	flex-direction: column;
-	gap: 0.35rem;
-	flex: 1 1 16rem;
-	min-width: 12rem;
-	max-width: 28rem;
+	gap: 0.3rem;
 }
 
 .subscription-api-key-row {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
-	gap: 0.5rem;
-}
-
-.subscription-api-key-field {
-	display: flex;
-	align-items: stretch;
-	flex: 1 1 12rem;
-	min-width: 10rem;
-	border: 1px solid rgba(148, 163, 184, 0.25);
-	border-radius: 10px;
-	overflow: hidden;
-	background: rgba(15, 23, 42, 0.55);
+	gap: 0.35rem;
 }
 
 .subscription-api-key-input {
 	flex: 1;
 	min-width: 0;
-	border: none;
-	background: transparent;
+	padding: 0.45rem 0.6rem;
+	border: 1px solid rgba(148, 163, 184, 0.25);
+	border-radius: 8px;
+	background: rgba(15, 23, 42, 0.55);
 	color: #e2e8f0;
 	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 	font-size: 0.72rem;
-	padding: 0.45rem 0.6rem;
 }
 
 .subscription-api-key-input:focus {
 	outline: none;
+	border-color: rgba(0, 85, 255, 0.45);
 }
 
-.subscription-api-key-eye {
-	border: none;
-	border-left: 1px solid rgba(148, 163, 184, 0.2);
-	background: rgba(30, 41, 59, 0.8);
+.subscription-api-key-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.2rem;
+	flex-shrink: 0;
+}
+
+.subscription-api-key-icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2rem;
+	height: 2rem;
+	padding: 0;
+	border: 1px solid rgba(148, 163, 184, 0.2);
+	border-radius: 8px;
+	background: rgba(30, 41, 59, 0.75);
 	color: #cbd5e1;
-	font-size: 0.68rem;
-	font-weight: 600;
-	padding: 0 0.65rem;
 	cursor: pointer;
-	white-space: nowrap;
+	transition:
+		background 0.15s,
+		color 0.15s,
+		border-color 0.15s;
 }
 
-.subscription-api-key-eye:disabled {
+.subscription-api-key-icon-btn svg {
+	width: 0.95rem;
+	height: 0.95rem;
+}
+
+.subscription-api-key-icon-btn:hover:not(:disabled) {
+	background: rgba(51, 65, 85, 0.95);
+	border-color: rgba(148, 163, 184, 0.35);
+	color: #f8fafc;
+}
+
+.subscription-api-key-icon-btn:disabled {
 	opacity: 0.45;
 	cursor: not-allowed;
 }
 
-.subscription-api-key-eye:not(:disabled):hover {
-	background: rgba(51, 65, 85, 0.95);
-	color: #f8fafc;
-}
-
-.subscription-api-key-create,
-.subscription-api-key-rotate {
+.subscription-api-key-create {
+	align-self: flex-start;
 	font-size: 0.78rem;
-	padding: 0.4rem 0.75rem;
+	padding: 0.38rem 0.7rem;
 }

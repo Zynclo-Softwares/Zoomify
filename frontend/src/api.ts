@@ -1,7 +1,7 @@
 import { ApiError, readApiErrorMessage } from "./apiErrors";
 import { authHeaders } from "./auth";
 import { byokHeaders } from "./byok";
-import { showToast } from "./toast";
+import { showErrorToast } from "./toast";
 
 export class ApiKeyInvalidError extends Error {
 	constructor() {
@@ -47,7 +47,7 @@ async function fetchWithAuth(input: string, init?: FetchOptions) {
 	const res = await fetch(input, { ...requestInit, headers });
 	if (!res.ok && !silent) {
 		const message = await readApiErrorMessage(res.clone());
-		showToast(message);
+		showErrorToast(message);
 		throw new ApiError(message, res.status);
 	}
 	return res;
@@ -75,8 +75,26 @@ export async function fetchHealth(): Promise<{
 	mongodb_enabled?: boolean;
 	stripe_webhook_configured?: boolean;
 }> {
-	const res = await fetch("/api/health");
-	return res.json();
+	try {
+		const res = await fetch("/api/health");
+		if (!res.ok) return { ok: false };
+		const data = await res.json();
+		return { ok: Boolean(data.ok), ...data };
+	} catch {
+		return { ok: false };
+	}
+}
+
+export async function fetchOpenRouterHealth(): Promise<{
+	ok: boolean;
+	detail?: string;
+}> {
+	try {
+		const res = await fetchWithAuth("/api/openrouter/health", { silent: true });
+		return res.json();
+	} catch {
+		return { ok: false, detail: "Could not reach OpenRouter health check" };
+	}
 }
 
 export type BillingPlan = {
@@ -132,7 +150,7 @@ export async function fetchBillingPlans(): Promise<BillingPlansResponse> {
 	const res = await fetch("/api/billing/plans");
 	if (!res.ok) {
 		const message = await readApiErrorMessage(res);
-		showToast(message);
+		showErrorToast(message);
 		throw new ApiError(message, res.status);
 	}
 	return res.json();
@@ -189,7 +207,7 @@ export async function* streamQuery(params: {
 
 	if (!res.body) {
 		const message = "The extraction stream could not be started.";
-		showToast(message);
+		showErrorToast(message);
 		throw new ApiError(message, res.status);
 	}
 

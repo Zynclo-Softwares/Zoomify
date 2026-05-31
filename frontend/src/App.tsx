@@ -5,11 +5,11 @@ import {
 	useRef,
 	useState,
 } from "react";
+import "./App.css";
 import {
 	ApiKeyInvalidError,
 	type ChatMessage,
 	deleteSession,
-	fetchHealth,
 	fetchModels,
 	streamQuery,
 } from "./api";
@@ -20,11 +20,10 @@ import {
 } from "./byok";
 import ApiKeyField from "./components/ApiKeyField";
 import MarkdownMessage from "./components/MarkdownMessage";
-import ModelCombobox, {
-	MODEL_COMBOBOX_INPUT_ID,
-} from "./components/ModelCombobox";
+import ModelCombobox from "./components/ModelCombobox";
+import ProductSettingsDrawer from "./components/ProductSettingsDrawer";
 import ProductSignOut from "./components/ProductSignOut";
-import SubscriptionBanner from "./components/SubscriptionBanner";
+import StatusIndicator from "./components/StatusIndicator";
 import TrailHost from "./components/TrailHost";
 import ZoomifyLogo from "./components/ZoomifyLogo";
 import {
@@ -45,6 +44,37 @@ function nextMessageId(): string {
 	return crypto.randomUUID();
 }
 
+function PanelViewToggle({
+	mobileView,
+	onChange,
+}: {
+	mobileView: "chat" | "tree";
+	onChange: (view: "chat" | "tree") => void;
+}) {
+	return (
+		<div className="panel-view-toggle" role="tablist" aria-label="Workspace">
+			<button
+				type="button"
+				role="tab"
+				className={mobileView === "chat" ? "active" : ""}
+				aria-selected={mobileView === "chat"}
+				onClick={() => onChange("chat")}
+			>
+				Chat
+			</button>
+			<button
+				type="button"
+				role="tab"
+				className={mobileView === "tree" ? "active" : ""}
+				aria-selected={mobileView === "tree"}
+				onClick={() => onChange("tree")}
+			>
+				Tree
+			</button>
+		</div>
+	);
+}
+
 export default function App() {
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [trailHtml, setTrailHtml] = useState("");
@@ -55,12 +85,13 @@ export default function App() {
 	const [model, setModel] = useState(() => getStoredModel() ?? "");
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const [hasKey, setHasKey] = useState(false);
-	const [changingKey, setChangingKey] = useState(false);
 	const [modelsError, setModelsError] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [schemaInfo, setSchemaInfo] = useState<string>("");
 	const [schemaCtaVisible, setSchemaCtaVisible] = useState(true);
 	const [schemaCtaLeaving, setSchemaCtaLeaving] = useState(false);
+	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [mobileView, setMobileView] = useState<"chat" | "tree">("chat");
 	const schemaCtaDismissedRef = useRef(false);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -105,7 +136,6 @@ export default function App() {
 
 	useEffect(() => {
 		void (async () => {
-			fetchHealth().catch(() => {});
 			const valid = await validateStoredKey();
 			setHasKey(valid);
 			if (valid) await loadModels();
@@ -117,16 +147,26 @@ export default function App() {
 			setHasKey(ready);
 			setModelsError("");
 			if (ready) {
-				setChangingKey(false);
 				void loadModels();
 				return;
 			}
-			setChangingKey(false);
 			setModels([]);
 			setModel("");
 		},
 		[loadModels],
 	);
+
+	const onReplaceOpenRouterKey = useCallback(() => {
+		if (
+			!window.confirm(
+				"Remove your OpenRouter key? You'll need to add it again to continue.",
+			)
+		) {
+			return;
+		}
+		clearStoredApiKey();
+		onApiKeyChange(false);
+	}, [onApiKeyChange]);
 
 	useEffect(() => {
 		if (messages.length === 0 && !busy) return;
@@ -233,117 +273,82 @@ export default function App() {
 			<div className="bg-glow bg-glow-a" aria-hidden />
 			<div className="bg-glow bg-glow-b" aria-hidden />
 
-			<header className="header">
-				<div className="brand">
-					<ZoomifyLogo size={48} className="logo-mark" />
-					<div>
-						<h1>
-							Zoomify
-							<span className="brand-tag">by Zynclo</span>
-						</h1>
-						<p className="subtitle">
-							Precision extraction from complex images — maps, diagrams, scans
-							&amp; tiny text.
-						</p>
+			<header className="header header-compact">
+				<div className="header-bar">
+					<div className="brand-compact">
+						<ZoomifyLogo size={36} className="logo-mark" />
+						<h1 className="brand-name">Zoomify</h1>
+						{busy && <span className="live-badge">Working</span>}
 					</div>
-					<div className="header-actions">
+					<div className="header-bar-actions">
+						<StatusIndicator hasKey={hasKey} />
 						<ProductSignOut />
-					</div>
-				</div>
-
-				<SubscriptionBanner />
-
-				<div
-					className={`toolbar card${hasKey && !changingKey ? " toolbar-controls" : " toolbar-byok"}`}
-				>
-					{hasKey && !changingKey ? (
-						<>
-							<div className="field field-model">
-								<label htmlFor={MODEL_COMBOBOX_INPUT_ID}>Model</label>
-								<ModelCombobox
-									models={models}
-									value={model}
-									onChange={onModelChange}
-									disabled={busy}
-								/>
-							</div>
-							<button
-								type="button"
-								className="btn ghost"
-								onClick={() => setChangingKey(true)}
-								disabled={busy}
-							>
-								Change key
-							</button>
-							<span className="status-pill ok key-status">Key ready</span>
-							<button
-								type="button"
-								className="btn ghost"
-								onClick={resetSession}
-								disabled={busy}
-							>
-								Reset
-							</button>
-						</>
-					) : (
-						<>
-							<ApiKeyField
-								disabled={busy}
-								changing={changingKey}
-								onKeyChange={onApiKeyChange}
-							/>
-							{changingKey && hasKey && (
-								<button
-									type="button"
-									className="btn ghost"
-									onClick={() => setChangingKey(false)}
-									disabled={busy}
-								>
-									Cancel
-								</button>
-							)}
-						</>
-					)}
-				</div>
-
-				{modelsError && hasKey && (
-					<p className="schema-info models-info">{modelsError}</p>
-				)}
-
-				{schemaInfo && <p className="schema-info">{schemaInfo}</p>}
-
-				{schemaCtaVisible && (
-					<aside
-						className={`schema-cta card${schemaCtaLeaving ? " leaving" : ""}`}
-					>
 						<button
 							type="button"
-							className="schema-cta-close"
-							aria-label="Dismiss"
-							onClick={dismissSchemaCta}
+							className="product-menu-btn"
+							aria-label="Open settings"
+							aria-expanded={settingsOpen}
+							onClick={() => setSettingsOpen(true)}
 						>
-							×
+							<svg viewBox="0 0 24 24" aria-hidden="true">
+								<path
+									d="M4 7h16M4 12h16M4 17h16"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="1.75"
+									strokeLinecap="round"
+								/>
+							</svg>
 						</button>
-						<ZoomifyLogo size={28} className="cta-icon" decorative />
-						<div>
-							<strong>Need a business schema?</strong>
-							<p>
-								Tell us your use case — Zynclo designs custom extraction schemas
-								for your documents.{" "}
-								<a href="https://github.com/Zynclo-Softwares/Zoomify/issues/new">
-									Request schema →
-								</a>
-							</p>
-						</div>
-					</aside>
-				)}
+					</div>
+				</div>
 			</header>
 
+			<ProductSettingsDrawer
+				open={settingsOpen}
+				onClose={() => setSettingsOpen(false)}
+				schemaCtaVisible={schemaCtaVisible}
+				schemaCtaLeaving={schemaCtaLeaving}
+				onDismissSchemaCta={dismissSchemaCta}
+			/>
+
 			<main className="layout">
-				<section className="panel card chat-panel">
+				<section
+					className={`panel card chat-panel${mobileView === "tree" ? " mobile-hidden" : ""}`}
+				>
 					<div className="panel-head">
-						<h2>Conversation</h2>
-						{busy && <span className="live-badge">Agent working</span>}
+						<div className="panel-head-title">
+							<h2>Conversation</h2>
+							<button
+								type="button"
+								className="panel-icon-btn"
+								onClick={() => void resetSession()}
+								disabled={busy}
+								title="Reset conversation"
+								aria-label="Reset conversation"
+							>
+								<svg viewBox="0 0 24 24" aria-hidden="true">
+									<path
+										d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0 0 14-2M19 5a9 9 0 0 0-14 2"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="1.75"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+									/>
+								</svg>
+							</button>
+						</div>
+						<div className="panel-head-meta">
+							{schemaInfo && (
+								<span className="schema-info-inline">{schemaInfo}</span>
+							)}
+							{busy && <span className="live-badge">Agent working</span>}
+							<PanelViewToggle
+								mobileView={mobileView}
+								onChange={setMobileView}
+							/>
+						</div>
 					</div>
 
 					<div className="messages">
@@ -380,105 +385,117 @@ export default function App() {
 						<div ref={messagesEndRef} />
 					</div>
 
-					<form className="composer" onSubmit={onSubmit}>
-						{imagePreview && (
-							<div className="composer-preview">
-								<img src={imagePreview} alt="Attached preview" />
+					<div className="composer">
+						{!hasKey ? (
+							<div className="composer-box composer-box-setup">
+								<ApiKeyField disabled={busy} onKeyChange={onApiKeyChange} />
 							</div>
-						)}
-						<div className="composer-box">
-							<textarea
-								value={query}
-								onChange={(e) => setQuery(e.target.value)}
-								placeholder="What should we extract from this image?"
-								rows={3}
-								disabled={busy}
-							/>
-							<div className="composer-actions">
-								<label
-									className="composer-icon-btn"
-									title="Attach image"
-									aria-label="Attach image"
-								>
-									<svg viewBox="0 0 24 24" aria-hidden="true">
-										<path
-											d="M16.5 6.5v8.25a4.5 4.5 0 1 1-9 0V7.5a3 3 0 1 1 6 0v7.5a1.5 1.5 0 1 1-3 0V7.5"
-											fill="none"
-											stroke="currentColor"
-											strokeWidth="1.75"
-											strokeLinecap="round"
-										/>
-									</svg>
-									<input
-										type="file"
-										accept="image/*"
-										onChange={(e) => onImageChange(e.target.files?.[0])}
+						) : (
+							<form onSubmit={onSubmit}>
+								{imagePreview && (
+									<div className="composer-preview">
+										<img src={imagePreview} alt="Attached preview" />
+									</div>
+								)}
+								<div className="composer-box">
+									<textarea
+										value={query}
+										onChange={(e) => setQuery(e.target.value)}
+										placeholder="What should we extract from this image?"
+										rows={3}
 										disabled={busy}
 									/>
-								</label>
-								<button
-									type="submit"
-									className="composer-icon-btn composer-send"
-									title={busy ? "Extracting…" : "Send"}
-									aria-label={busy ? "Extracting" : "Send"}
-									disabled={busy || (!query.trim() && !image)}
-								>
-									{busy ? (
-										<svg
-											viewBox="0 0 24 24"
-											className="spin"
-											aria-hidden="true"
-										>
-											<circle
-												cx="12"
-												cy="12"
-												r="9"
-												fill="none"
-												stroke="currentColor"
-												strokeWidth="2"
-												strokeDasharray="28 56"
+									<div className="composer-toolbar">
+										<div className="composer-toolbar-left">
+											<ModelCombobox
+												models={models}
+												value={model}
+												onChange={onModelChange}
+												onReplaceKey={onReplaceOpenRouterKey}
+												disabled={busy}
 											/>
-										</svg>
-									) : (
-										<svg viewBox="0 0 24 24" aria-hidden="true">
-											<path
-												d="M5 12h12M13 7l5 5-5 5"
-												fill="none"
-												stroke="currentColor"
-												strokeWidth="1.75"
-												strokeLinecap="round"
-												strokeLinejoin="round"
-											/>
-										</svg>
-									)}
-								</button>
-							</div>
-						</div>
-					</form>
+											{modelsError && (
+												<span className="composer-models-error">
+													{modelsError}
+												</span>
+											)}
+										</div>
+										<div className="composer-toolbar-right">
+											<label
+												className="composer-icon-btn"
+												title="Attach image"
+												aria-label="Attach image"
+											>
+												<svg viewBox="0 0 24 24" aria-hidden="true">
+													<path
+														d="M16.5 6.5v8.25a4.5 4.5 0 1 1-9 0V7.5a3 3 0 1 1 6 0v7.5a1.5 1.5 0 1 1-3 0V7.5"
+														fill="none"
+														stroke="currentColor"
+														strokeWidth="1.75"
+														strokeLinecap="round"
+													/>
+												</svg>
+												<input
+													type="file"
+													accept="image/*"
+													onChange={(e) => onImageChange(e.target.files?.[0])}
+													disabled={busy}
+												/>
+											</label>
+											<button
+												type="submit"
+												className="composer-icon-btn composer-send"
+												title={busy ? "Extracting…" : "Send"}
+												aria-label={busy ? "Extracting" : "Send"}
+												disabled={busy || (!query.trim() && !image)}
+											>
+												{busy ? (
+													<svg
+														viewBox="0 0 24 24"
+														className="spin"
+														aria-hidden="true"
+													>
+														<circle
+															cx="12"
+															cy="12"
+															r="9"
+															fill="none"
+															stroke="currentColor"
+															strokeWidth="2"
+															strokeDasharray="28 56"
+														/>
+													</svg>
+												) : (
+													<svg viewBox="0 0 24 24" aria-hidden="true">
+														<path
+															d="M5 12h12M13 7l5 5-5 5"
+															fill="none"
+															stroke="currentColor"
+															strokeWidth="1.75"
+															strokeLinecap="round"
+															strokeLinejoin="round"
+														/>
+													</svg>
+												)}
+											</button>
+										</div>
+									</div>
+								</div>
+							</form>
+						)}
+					</div>
 				</section>
 
-				<section className="panel card tree-panel">
+				<section
+					className={`panel card tree-panel${mobileView === "chat" ? " mobile-hidden" : ""}`}
+				>
 					<div className="panel-head">
 						<h2>Zoom tree</h2>
-						<span className="panel-meta">Live trail</span>
+						<PanelViewToggle mobileView={mobileView} onChange={setMobileView} />
 					</div>
 					<TrailHost html={trailHtml} />
 				</section>
 			</main>
-
-			<footer className="footer">
-				<ZoomifyLogo size={20} decorative />
-				<span>
-					Zoomify · Powered by{" "}
-					<a
-						href="https://zynclo.com"
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						zynclo.com
-					</a>
-				</span>
-			</footer>
 		</div>
 	);
 }

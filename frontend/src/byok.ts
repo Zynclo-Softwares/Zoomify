@@ -1,5 +1,5 @@
 import { readApiErrorMessage } from "./apiErrors";
-import { showToast } from "./toast";
+import { showErrorToast } from "./toast";
 
 const STORAGE_KEY = "zoomify.encrypted_api_key";
 const FINGERPRINT_KEY = "zoomify.byok_key_fingerprint";
@@ -36,7 +36,7 @@ export async function fetchByokPublicKey(): Promise<string> {
 	const res = await fetch("/api/byok/public-key");
 	if (!res.ok) {
 		const message = await readApiErrorMessage(res);
-		showToast(message);
+		showErrorToast(message);
 		throw new Error(message);
 	}
 	const data = (await res.json()) as { public_key_pem: string };
@@ -79,10 +79,6 @@ export function getStoredEncryptedKey(): string | null {
 	} catch {
 		return null;
 	}
-}
-
-export function hasStoredApiKey(): boolean {
-	return Boolean(getStoredEncryptedKey());
 }
 
 /** Drop saved key when the server encryption key changed (e.g. dev restart). */

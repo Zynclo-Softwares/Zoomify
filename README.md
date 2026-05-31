@@ -126,24 +126,32 @@ uv run python app.py
 
 Interactive docs: **http://127.0.0.1:8000/api/docs** (ReDoc at `/api/redoc`).
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/health` | Service status (BYOK, Clerk, MongoDB, Stripe flags) |
-| `GET` | `/api/byok/public-key` | RSA public key for client-side key encryption |
-| `GET` | `/api/auth/me` | Signed-in user (Clerk JWT; dev bypass when Clerk unset) |
-| `GET` | `/api/models` | Vision models (requires encrypted OpenRouter key header) |
-| `POST` | `/api/query` | Stream extraction (multipart; metered by plan) |
-| `DELETE` | `/api/session/{id}` | Clear server-side session state |
-| `GET` | `/api/billing/plans` | Plan catalog + Stripe Payment Link URLs |
-| `GET` | `/api/billing/status` | Current plan and daily usage |
-| `POST` | `/api/billing/webhook` | Stripe subscription events |
+**Authentication:** most endpoints need two headers — see the Swagger description at
+`/api/docs` (click **Authorize** for both schemes):
+
+| Header | Purpose |
+|--------|---------|
+| `Authorization: Bearer …` | Zoomify platform key (`zfy_live_…`) or Clerk JWT |
+| `X-Encrypted-Api-Key` | RSA-OAEP encrypted OpenRouter key (get PEM from `/api/byok/public-key`) |
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/health` | — | Service status (BYOK, Clerk, MongoDB, Stripe flags) |
+| `GET` | `/api/byok/public-key` | — | RSA public key for client-side key encryption |
+| `GET` | `/api/auth/me` | Zoomify | Signed-in user (platform key or Clerk JWT) |
+| `GET` | `/api/platform-key` | Zoomify | Platform key status (prefix only) |
+| `POST` | `/api/platform-key` | Clerk JWT | Create platform key (returned once) |
+| `POST` | `/api/platform-key/rotate` | Zoomify | Rotate platform key |
+| `GET` | `/api/models` | Both | Vision models |
+| `POST` | `/api/query` | Both | Stream extraction (multipart; metered by plan) |
+| `DELETE` | `/api/session/{id}` | Zoomify | Clear server-side session state |
+| `GET` | `/api/billing/plans` | — | Plan catalog + Stripe Payment Link URLs |
+| `GET` | `/api/billing/status` | Zoomify | Current plan and daily usage |
+| `POST` | `/api/billing/webhook` | Stripe sig | Stripe subscription events |
 
 **Query stream:** `POST /api/query` accepts multipart fields `query`, optional
 `image`, `model`, `schema`, `structured`, `session_id`. Responses are NDJSON
 events (`session`, `trail`, `assistant`, `schema`, `error`, `done`).
-
-**BYOK header:** `X-Encrypted-Api-Key` — RSA-OAEP encrypted OpenRouter key from
-the browser. The server never stores your OpenRouter key.
 
 **Business schemas:** tag images with metadata `structure-zoomify:<id>` (e.g.
 `acme-sld-v1`) or pass `schema` in the request. See `src/zoomify/schema_registry.py`.

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import FeatureIcon, { type IconName } from "../components/FeatureIcon";
+import LandingNav from "../components/LandingNav";
 import ZoomifyLogo from "../components/ZoomifyLogo";
 import "./LandingPage.css";
 
@@ -42,12 +43,8 @@ export default function LandingPage() {
 			<div className="landing-glow landing-glow-a" aria-hidden />
 			<div className="landing-glow landing-glow-b" aria-hidden />
 
-			<header className="landing-nav">
-				<div className="landing-brand">
-					<ZoomifyLogo size={36} />
-					<span>Zoomify</span>
-				</div>
-				<nav className="landing-links">
+			<LandingNav>
+				<div className="landing-links-group">
 					<Link to="/pricing" className="landing-link">
 						Pricing
 					</Link>
@@ -59,14 +56,8 @@ export default function LandingPage() {
 					>
 						API
 					</a>
-					<Link to="/sign-in" className="landing-link">
-						Sign in
-					</Link>
-					<Link to="/sign-up" className="landing-btn">
-						Get started
-					</Link>
-				</nav>
-			</header>
+				</div>
+			</LandingNav>
 
 			<main className="landing-hero">
 				<ZoomifyLogo size={88} className="landing-logo" decorative />

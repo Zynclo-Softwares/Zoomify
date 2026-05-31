@@ -12,7 +12,16 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
 from zoomify.platform_keys import is_platform_key, lookup_clerk_user_by_platform_key
 
-_bearer = HTTPBearer(auto_error=False)
+_bearer = HTTPBearer(
+    auto_error=False,
+    scheme_name="ZoomifyAuth",
+    bearerFormat="zfy_live_… or Clerk JWT",
+    description=(
+        "Zoomify account auth. Use a **platform API key** (`zfy_live_…` from the "
+        "product UI) for scripts and integrations, or a **Clerk session JWT** from "
+        "the browser. Paste only the token value here — Swagger adds the `Bearer` prefix."
+    ),
+)
 
 
 def clerk_jwks_url() -> str | None:

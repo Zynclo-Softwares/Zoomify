@@ -14,8 +14,42 @@ import {
 	maskedPlatformKey,
 	setStoredPlatformKey,
 } from "../platformKeyStorage";
-import { showToast } from "../toast";
+import { showErrorToast, showInfoToast, showSuccessToast } from "../toast";
 import "./SubscriptionBanner.css";
+
+function EyeIcon({ hidden }: { hidden: boolean }) {
+	if (hidden) {
+		return (
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				<path
+					d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.1A10.7 10.7 0 0 1 12 5c5 0 9.3 3 11 7-1 2.2-2.8 4-5 5.2M6.7 6.7C4.5 8.1 3 10 2 12c1.7 4 6 7 10 7 1.1 0 2.2-.2 3.2-.6"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="1.75"
+					strokeLinecap="round"
+				/>
+			</svg>
+		);
+	}
+	return (
+		<svg viewBox="0 0 24 24" aria-hidden="true">
+			<path
+				d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.75"
+			/>
+			<circle
+				cx="12"
+				cy="12"
+				r="3"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.75"
+			/>
+		</svg>
+	);
+}
 
 export default function SubscriptionBanner() {
 	const [status, setStatus] = useState<BillingStatus | null>(null);
@@ -66,7 +100,7 @@ export default function SubscriptionBanner() {
 				prefix: created.prefix,
 				created_at: created.created_at,
 			});
-			showToast("API key created — copy it now; it won't be shown again.");
+			showSuccessToast("API key created — view or copy it below.");
 		} catch {
 			// toast handled by fetchWithAuth
 		} finally {
@@ -93,11 +127,26 @@ export default function SubscriptionBanner() {
 				prefix: rotated.prefix,
 				created_at: rotated.created_at,
 			});
-			showToast("API key rotated — copy the new key now.");
+			showSuccessToast("API key rotated — your new key is shown below.");
 		} catch {
 			// toast handled by fetchWithAuth
 		} finally {
 			setKeyBusy(false);
+		}
+	};
+
+	const onCopyKey = async () => {
+		if (!fullKey) {
+			showInfoToast(
+				"Copy unavailable — create or rotate the key in this browser first.",
+			);
+			return;
+		}
+		try {
+			await navigator.clipboard.writeText(fullKey);
+			showSuccessToast("API key copied.");
+		} catch {
+			showErrorToast("Could not copy to clipboard.");
 		}
 	};
 
@@ -106,34 +155,41 @@ export default function SubscriptionBanner() {
 
 	return (
 		<aside className={`subscription-banner card${isFree ? " free" : ""}`}>
-			<div className="subscription-main">
-				<span className="subscription-label">Your plan</span>
-				<strong className="subscription-plan">{status.plan_name}</strong>
-				<span className="subscription-usage">{usageLabel}</span>
-				{status.subscription_status !== "none" && (
-					<span className="subscription-status">
-						{status.subscription_status}
-					</span>
-				)}
+			<div className="subscription-plan-row">
+				<div className="subscription-main">
+					<span className="subscription-label">Your plan</span>
+					<div className="subscription-plan-line">
+						<strong className="subscription-plan">{status.plan_name}</strong>
+						<span className="subscription-usage">{usageLabel}</span>
+						{status.subscription_status !== "none" && (
+							<span className="subscription-status">
+								{status.subscription_status}
+							</span>
+						)}
+					</div>
+				</div>
+				<Link to="/pricing#plans" className="subscription-upgrade">
+					{isFree ? "Upgrade plan" : "Change plan"}
+				</Link>
 			</div>
 
 			<div className="subscription-api-key">
 				<span className="subscription-label">API key</span>
 				{keyStatus?.has_key ? (
 					<div className="subscription-api-key-row">
-						<div className="subscription-api-key-field">
-							<input
-								className="subscription-api-key-input"
-								type={revealed && fullKey ? "text" : "password"}
-								value={displayValue}
-								readOnly
-								spellCheck={false}
-								autoComplete="off"
-								aria-label="Zoomify platform API key"
-							/>
+						<input
+							className="subscription-api-key-input"
+							type={revealed && fullKey ? "text" : "password"}
+							value={displayValue}
+							readOnly
+							spellCheck={false}
+							autoComplete="off"
+							aria-label="Zoomify platform API key"
+						/>
+						<div className="subscription-api-key-actions">
 							<button
 								type="button"
-								className="subscription-api-key-eye"
+								className="subscription-api-key-icon-btn"
 								onClick={() => setRevealed((v) => !v)}
 								disabled={!fullKey}
 								title={
@@ -145,17 +201,56 @@ export default function SubscriptionBanner() {
 								}
 								aria-label={revealed ? "Hide API key" : "Show API key"}
 							>
-								{revealed ? "Hide" : "Show"}
+								<EyeIcon hidden={revealed && Boolean(fullKey)} />
+							</button>
+							<button
+								type="button"
+								className="subscription-api-key-icon-btn"
+								onClick={() => void onRotateKey()}
+								disabled={keyBusy}
+								title="Rotate API key"
+								aria-label="Rotate API key"
+							>
+								<svg viewBox="0 0 24 24" aria-hidden="true">
+									<path
+										d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0 0 14-2M19 5a9 9 0 0 0-14 2"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="1.75"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+									/>
+								</svg>
+							</button>
+							<button
+								type="button"
+								className="subscription-api-key-icon-btn"
+								onClick={() => void onCopyKey()}
+								disabled={!fullKey}
+								title="Copy API key"
+								aria-label="Copy API key"
+							>
+								<svg viewBox="0 0 24 24" aria-hidden="true">
+									<rect
+										x="9"
+										y="9"
+										width="11"
+										height="11"
+										rx="2"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="1.75"
+									/>
+									<path
+										d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="1.75"
+										strokeLinecap="round"
+									/>
+								</svg>
 							</button>
 						</div>
-						<button
-							type="button"
-							className="btn ghost subscription-api-key-rotate"
-							onClick={() => void onRotateKey()}
-							disabled={keyBusy}
-						>
-							Rotate key
-						</button>
 					</div>
 				) : (
 					<button
@@ -168,10 +263,6 @@ export default function SubscriptionBanner() {
 					</button>
 				)}
 			</div>
-
-			<Link to="/pricing#plans" className="subscription-upgrade">
-				{isFree ? "Upgrade plan" : "Change plan"}
-			</Link>
 		</aside>
 	);
 }

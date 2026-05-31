@@ -9,9 +9,9 @@ export const clerkAppearance = {
 		colorPrimaryForeground: "#ffffff",
 		colorForeground: "#f1f5f9",
 		colorMutedForeground: "#94a3b8",
-		colorInput: "rgba(15, 23, 42, 0.92)",
+		colorInput: "#334155",
 		colorInputForeground: "#f1f5f9",
-		colorBorder: "rgba(148, 163, 184, 0.18)",
+		colorBorder: "rgba(148, 163, 184, 0.32)",
 		colorDanger: "#f87171",
 		borderRadius: "12px",
 		fontFamily: '"DM Sans", ui-sans-serif, system-ui, sans-serif',
@@ -35,7 +35,6 @@ export const clerkAppearance = {
 			background: "rgba(17, 24, 39, 0.78)",
 			border: "1px solid rgba(148, 163, 184, 0.14)",
 			borderRadius: "16px",
-			backdropFilter: "blur(18px)",
 			boxShadow:
 				"0 24px 48px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
 			padding: "1.75rem 1.5rem",
@@ -60,15 +59,17 @@ export const clerkAppearance = {
 			fontSize: "0.84rem",
 		},
 		formFieldInput: {
-			backgroundColor: "rgba(15, 23, 42, 0.92)",
-			border: "1px solid rgba(148, 163, 184, 0.2)",
+			backgroundColor: "#334155",
+			border: "1px solid rgba(148, 163, 184, 0.38)",
 			borderRadius: "10px",
 			minHeight: "2.65rem",
 			padding: "0.65rem 0.85rem",
+			boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.04)",
 			transition: "border-color 0.15s ease, box-shadow 0.15s ease",
 			"&:focus": {
-				borderColor: "rgba(59, 130, 246, 0.65)",
-				boxShadow: "0 0 0 3px rgba(0, 85, 255, 0.14)",
+				borderColor: "rgba(96, 165, 250, 0.75)",
+				boxShadow:
+					"inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 3px rgba(0, 85, 255, 0.18)",
 			},
 		},
 		formFieldInputShowPasswordButton: {
@@ -108,8 +109,8 @@ export const clerkAppearance = {
 			color: "#64748b",
 		},
 		socialButtonsBlockButton: {
-			backgroundColor: "rgba(15, 23, 42, 0.85)",
-			border: "1px solid rgba(148, 163, 184, 0.18)",
+			backgroundColor: "#334155",
+			border: "1px solid rgba(148, 163, 184, 0.32)",
 			borderRadius: "10px",
 			color: "#f1f5f9",
 			"&:hover": {
