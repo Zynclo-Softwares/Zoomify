@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { SAMPLE_IMAGE_FILENAME, SAMPLE_IMAGE_URL } from "../sampleImage";
 import { openSchemaContact } from "../schemaContact";
 import SubscriptionBanner from "./SubscriptionBanner";
 import "./SchemaContactModal.css";
@@ -8,6 +9,8 @@ import ZoomifyLogo from "./ZoomifyLogo";
 type ProductSettingsDrawerProps = {
 	open: boolean;
 	onClose: () => void;
+	busy: boolean;
+	onSelectSampleImage: () => void | Promise<void>;
 	schemaCtaVisible: boolean;
 	schemaCtaLeaving: boolean;
 	onDismissSchemaCta: () => void;
@@ -31,6 +34,8 @@ function DrawerSection({
 export default function ProductSettingsDrawer({
 	open,
 	onClose,
+	busy,
+	onSelectSampleImage,
 	schemaCtaVisible,
 	schemaCtaLeaving,
 	onDismissSchemaCta,
@@ -80,6 +85,31 @@ export default function ProductSettingsDrawer({
 				</header>
 
 				<div className="settings-drawer-body">
+					<DrawerSection title="Try a sample">
+						<p className="settings-drawer-hint">
+							Attach the demo image to explore Zoomify without uploading your
+							own file.
+						</p>
+						<button
+							type="button"
+							className="sample-picker"
+							onClick={() => {
+								void onSelectSampleImage();
+								onClose();
+							}}
+							disabled={busy}
+							title="Use sample image"
+							aria-label="Use sample image"
+						>
+							<span className="sample-picker-frame">
+								<img src={SAMPLE_IMAGE_URL} alt="" />
+							</span>
+							<span className="sample-picker-caption">
+								Click to attach · {SAMPLE_IMAGE_FILENAME}
+							</span>
+						</button>
+					</DrawerSection>
+
 					<DrawerSection title="Plan &amp; billing">
 						<SubscriptionBanner />
 					</DrawerSection>

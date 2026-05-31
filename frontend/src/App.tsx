@@ -38,11 +38,7 @@ import {
 	resolveModelPreference,
 	setStoredModel,
 } from "./modelPreference";
-import {
-	fetchSampleImageFile,
-	SAMPLE_IMAGE_FILENAME,
-	SAMPLE_IMAGE_URL,
-} from "./sampleImage";
+import { fetchSampleImageFile } from "./sampleImage";
 
 const DEFAULT_PROMPT =
 	"Extract the key information from this image; zoom in to read any small text.";
@@ -423,6 +419,8 @@ export default function App() {
 			<ProductSettingsDrawer
 				open={settingsOpen}
 				onClose={() => setSettingsOpen(false)}
+				busy={busy}
+				onSelectSampleImage={selectSampleImage}
 				schemaCtaVisible={schemaCtaVisible}
 				schemaCtaLeaving={schemaCtaLeaving}
 				onDismissSchemaCta={dismissSchemaCta}
@@ -474,28 +472,13 @@ export default function App() {
 									<ZoomifyLogo size={72} className="empty-logo" decorative />
 									<p className="empty-brand-name">Zoomify</p>
 								</div>
-								<p className="empty-title">Try a sample image</p>
+								<p className="empty-title">Start extracting</p>
 								<p className="hint">
-									Click the demo image below to attach it, add your OpenRouter
-									key, ask a question, and send. Or use the paperclip / paste
-									with <kbd className="kbd-hint">⌘V</kbd> /{" "}
+									Open the menu to try a sample image, add your OpenRouter key,
+									then ask a question. Or attach with the paperclip / paste with{" "}
+									<kbd className="kbd-hint">⌘V</kbd> /{" "}
 									<kbd className="kbd-hint">Ctrl+V</kbd>.
 								</p>
-								<button
-									type="button"
-									className="empty-sample"
-									onClick={() => void selectSampleImage()}
-									disabled={busy}
-									title="Use sample image"
-									aria-label="Use sample image"
-								>
-									<span className="empty-sample-frame">
-										<img src={SAMPLE_IMAGE_URL} alt="" />
-									</span>
-									<span className="empty-sample-caption">
-										Click to attach · {SAMPLE_IMAGE_FILENAME}
-									</span>
-								</button>
 							</div>
 						)}
 						{messages.map((m) => (
