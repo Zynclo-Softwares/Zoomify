@@ -63,7 +63,7 @@ Stripe key stays in `secrets.auto.tfvars` (`STRIPE_SECRET_KEY`). Railway auth us
 | File | Gitignored | Purpose |
 |------|------------|---------|
 | `terraform.tfvars` | yes | Railway names, optional repo, Clerk JWKS, rate limits |
-| `secrets.auto.tfvars` | yes | Auto-loaded: `secret_env_vars` (`BYOK_PRIVATE_KEY`, `MONGODB_URI`, `STRIPE_SECRET_KEY`) |
+| `secrets.auto.tfvars` | yes | Auto-loaded: `secret_env_vars` (`BYOK_PRIVATE_KEY`, `GITHUB_TOKEN`, `MONGODB_URI`, `STRIPE_SECRET_KEY`) |
 
 `STRIPE_SECRET_KEY` in `secrets.auto.tfvars` is used for **both** Terraform Stripe apply and the Railway app runtime. Set it once.
 
