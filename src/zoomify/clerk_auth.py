@@ -70,7 +70,11 @@ async def require_clerk_user(
 async def require_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> dict[str, Any]:
-    """Accept Clerk session JWT or Zoomify platform API key (``zfy_live_...``)."""
+    """Accept either auth method; both resolve to the same Clerk ``sub`` user id.
+
+    - Clerk session JWT (browser / short-lived)
+    - Zoomify platform API key ``zfy_live_...`` (programmatic / long-lived)
+    """
     if not is_clerk_enabled():
         return {"sub": "dev-local", "bypass": True}
 

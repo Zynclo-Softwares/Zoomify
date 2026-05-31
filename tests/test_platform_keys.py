@@ -71,6 +71,27 @@ def test_require_clerk_user_rejects_platform_key(monkeypatch):
     assert exc.value.status_code == 403
 
 
+def test_auth_me_with_platform_key(client, monkeypatch):
+    monkeypatch.setenv("CLERK_JWKS_URL", "https://example.com/jwks.json")
+    clerk_auth.reset_jwks_cache()
+    created = create_platform_key("user_api")
+    r = client.get("/api/auth/me", headers={"Authorization": f"Bearer {created['key']}"})
+    assert r.status_code == 200
+    assert r.json()["user_id"] == "user_api"
+    assert r.json()["auth"] == "platform_key"
+
+
+def test_rotate_with_platform_key(client, monkeypatch):
+    monkeypatch.setenv("CLERK_JWKS_URL", "https://example.com/jwks.json")
+    clerk_auth.reset_jwks_cache()
+    created = create_platform_key("user_api")
+    headers = {"Authorization": f"Bearer {created['key']}"}
+    r = client.post("/api/platform-key/rotate", headers=headers)
+    assert r.status_code == 200
+    assert r.json()["key"] != created["key"]
+    assert platform_keys.lookup_clerk_user_by_platform_key(created["key"]) is None
+
+
 def test_platform_key_http_flow(client, monkeypatch):
     monkeypatch.delenv("CLERK_JWKS_URL", raising=False)
     clerk_auth.reset_jwks_cache()

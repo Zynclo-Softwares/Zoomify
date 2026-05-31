@@ -100,10 +100,12 @@ def require_openrouter_key(request: Request) -> str:
 
 
 @app.get("/api/auth/me", tags=["auth"])
-def auth_me(user: dict = Depends(require_clerk_user)):
+def auth_me(user: dict = Depends(require_user)):
+    """Return the Clerk user id for the caller (Clerk JWT or platform API key)."""
     return {
         "user_id": user.get("sub"),
         "email": user.get("email") or user.get("primary_email_address"),
+        "auth": user.get("auth") or ("bypass" if user.get("bypass") else None),
         "bypass": bool(user.get("bypass")),
     }
 
@@ -121,7 +123,7 @@ def billing_status(user: dict = Depends(require_user)):
 
 
 @app.get("/api/platform-key", tags=["auth"])
-def get_platform_key(user: dict = Depends(require_clerk_user)):
+def get_platform_key(user: dict = Depends(require_user)):
     """Whether the user has a Zoomify platform API key (prefix only — never the secret)."""
     return platform_key_status(_user_id(user))
 
@@ -136,7 +138,7 @@ def post_platform_key(user: dict = Depends(require_clerk_user)):
 
 
 @app.post("/api/platform-key/rotate", tags=["auth"])
-def rotate_platform_key_route(user: dict = Depends(require_clerk_user)):
+def rotate_platform_key_route(user: dict = Depends(require_user)):
     """Replace the user's platform API key. The new key is returned once."""
     try:
         return rotate_platform_key(_user_id(user))
