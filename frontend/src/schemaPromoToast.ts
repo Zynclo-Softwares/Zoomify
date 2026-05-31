@@ -4,8 +4,6 @@ import { showInfoToast } from "./toast";
 const STORAGE_KEY = "zoomify-schema-promo-last-shown";
 const COOLDOWN_MS = 30 * 60 * 1000;
 
-let queued = false;
-
 function readLastShownAt(): number | null {
 	try {
 		const raw = localStorage.getItem(STORAGE_KEY);
@@ -31,10 +29,9 @@ function isPromoCooldownActive(now = Date.now()): boolean {
 	return now - lastShownAt < COOLDOWN_MS;
 }
 
-/** Bluish promo toast on full page load — mirrors the premium schema pricing card. */
+/** Schema promo toast for the product workspace (respects 30-minute cooldown). */
 export function showSchemaPromoOnLoad() {
-	if (queued || isPromoCooldownActive()) return;
-	queued = true;
+	if (isPromoCooldownActive()) return;
 	markShownNow();
 
 	showInfoToast(

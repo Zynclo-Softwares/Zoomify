@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { showSchemaPromoOnLoad } from "../schemaPromoToast";
 import { dismissToast, subscribeToasts, type ToastItem } from "../toast";
 import "./ToastHost.css";
 
@@ -7,10 +6,6 @@ export default function ToastHost() {
 	const [items, setItems] = useState<ToastItem[]>([]);
 
 	useEffect(() => subscribeToasts(setItems), []);
-
-	useEffect(() => {
-		void showSchemaPromoOnLoad();
-	}, []);
 
 	if (items.length === 0) return null;
 
