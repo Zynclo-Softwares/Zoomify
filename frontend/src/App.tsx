@@ -27,6 +27,11 @@ import ProductSignOut from "./components/ProductSignOut";
 import SubscriptionBanner from "./components/SubscriptionBanner";
 import TrailHost from "./components/TrailHost";
 import ZoomifyLogo from "./components/ZoomifyLogo";
+import {
+	getStoredModel,
+	resolveModelPreference,
+	setStoredModel,
+} from "./modelPreference";
 
 const DEFAULT_PROMPT =
 	"Extract the key information from this image; zoom in to read any small text.";
@@ -47,7 +52,7 @@ export default function App() {
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const [models, setModels] = useState<string[]>([]);
-	const [model, setModel] = useState("");
+	const [model, setModel] = useState(() => getStoredModel() ?? "");
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const [hasKey, setHasKey] = useState(false);
 	const [changingKey, setChangingKey] = useState(false);
@@ -75,7 +80,7 @@ export default function App() {
 		try {
 			const m = await fetchModels();
 			setModels(m.choices);
-			setModel(m.default);
+			setModel(resolveModelPreference(m.default));
 			setModelsError("");
 			await rememberKeyFingerprint();
 		} catch (err) {
@@ -88,9 +93,14 @@ export default function App() {
 				return;
 			}
 			setModels([]);
-			setModel(DEFAULT_MODEL);
+			setModel(resolveModelPreference(DEFAULT_MODEL));
 			setModelsError("Could not load models — type a model id manually.");
 		}
+	}, []);
+
+	const onModelChange = useCallback((next: string) => {
+		setModel(next);
+		setStoredModel(next);
 	}, []);
 
 	useEffect(() => {
@@ -253,7 +263,7 @@ export default function App() {
 								<ModelCombobox
 									models={models}
 									value={model}
-									onChange={setModel}
+									onChange={onModelChange}
 									disabled={busy}
 								/>
 							</div>
