@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { type BillingPlansResponse, fetchBillingPlans } from "../api";
+import { openSchemaContact } from "../schemaContact";
 import "./PricingSection.css";
+import "./SchemaContactModal.css";
 
 type BillingCycle = "monthly" | "yearly";
 
@@ -165,14 +167,13 @@ export default function PricingSection({
 							<li key={h}>{h}</li>
 						))}
 					</ul>
-					<a
-						href={premium.contact}
-						className="pricing-cta ghost"
-						target="_blank"
-						rel="noopener noreferrer"
+					<button
+						type="button"
+						className="schema-contact-trigger pricing-cta ghost"
+						onClick={openSchemaContact}
 					>
 						Request schema →
-					</a>
+					</button>
 				</article>
 			</div>
 

@@ -78,7 +78,7 @@ def billing_plans_payload() -> dict:
                 "Private schema registry per team",
                 "Delivered by Zynclo engineers",
             ],
-            "contact": "https://github.com/zynclo/zoomify/issues",
+            "contact": "form",
         },
     }
 

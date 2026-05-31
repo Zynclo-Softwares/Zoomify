@@ -23,8 +23,9 @@ _TRAIL_CSS = """
 .trail .crumb.current { border-color: rgba(0, 85, 255, 0.55); background: rgba(0, 85, 255, 0.1);
   box-shadow: 0 -6px 16px rgba(0, 85, 255, 0.18), 0 0 0 1px rgba(0, 85, 255, 0.25);
   z-index: 1; position: relative; }
-.trail .crumb img.thumb { height: 44px; width: auto; border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 4px; display: block; cursor: zoom-in; flex-shrink: 0; object-fit: contain; }
+.trail .crumb img.thumb { width: 54px; height: 40px; border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 4px; display: block; cursor: zoom-in; flex-shrink: 0;
+  object-fit: contain; object-position: center; background: rgba(15, 23, 42, 0.92); }
 .trail .crumb img.thumb:hover { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.55); }
 .trail .crumb .lbl { line-height: 1.25; color: #cbd5e1; font-size: 11px; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
