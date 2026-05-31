@@ -35,6 +35,7 @@ locals {
   # Secret backend keys — keep in sync with root .env.example.
   backend_secret_env_names = [
     "BYOK_PRIVATE_KEY",
+    "GITHUB_TOKEN",
     "MONGODB_URI",
     "STRIPE_SECRET_KEY",
   ]
