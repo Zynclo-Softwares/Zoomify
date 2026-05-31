@@ -89,7 +89,7 @@ print(encrypt_api_key("sk-or-v1-YOUR_KEY", public_pem=pem))
 
 - **Content-Type:** `multipart/form-data` with fields `query`, optional `image`, `model`, etc.
 - **Response:** `application/x-ndjson` — one JSON object per line.
-- **Events:** `session`, `user`, `trail`, `assistant`, `schema`, `error`, `done`.
+- **Events:** `session`, `user`, `trail`, `assistant`, `schema`, `error`, `cancelled`, `done`.
 - Each successful request counts as **one extraction** against your daily plan limit.
 """
 

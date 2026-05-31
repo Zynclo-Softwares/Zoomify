@@ -12,11 +12,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from zoomify.billing import billing_plans_payload, enforce_query_quota, record_query_usage
 from zoomify.byok_crypto import HEADER_NAME, decrypt_api_key, is_byok_ready, public_key_pem
 from zoomify.clerk_auth import is_clerk_enabled, require_clerk_user, require_user
 from zoomify.db import ensure_indexes, mongodb_database_name, mongodb_enabled, user_billing_status
+from zoomify.github_issues import create_schema_inquiry_issue, github_issues_configured
 from zoomify.openapi import NDJSON_STREAM_RESPONSE, OPENAPI_TAGS, customize_openapi
 from zoomify.platform_keys import (
     create_platform_key,
@@ -89,6 +91,7 @@ def health():
         "mongodb_enabled": mongodb_enabled(),
         "mongodb_database": mongodb_database_name() if mongodb_enabled() else None,
         "stripe_webhook_configured": stripe_configured(),
+        "schema_inquiry_configured": github_issues_configured(),
     }
 
 
@@ -144,6 +147,27 @@ def auth_me(user: dict = Depends(require_user)):
 def billing_plans():
     """Public plan catalog, Stripe Payment Link URLs, and premium schema service."""
     return billing_plans_payload()
+
+
+class SchemaInquiryRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=3, max_length=254)
+    message: str = Field(min_length=1, max_length=8000)
+
+
+@app.post("/api/schema-inquiry", tags=["support"])
+def schema_inquiry(body: SchemaInquiryRequest):
+    """Create a GitHub issue for a premium schema service inquiry (public form)."""
+    try:
+        return create_schema_inquiry_issue(
+            name=body.name,
+            email=body.email,
+            message=body.message,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/api/billing/status", tags=["billing"])
@@ -209,6 +233,7 @@ def list_models(
     },
 )
 async def query(
+    request: Request,
     query: str = Form(
         "",
         description="Natural-language instruction for what to extract from the image.",
@@ -244,7 +269,7 @@ async def query(
 
     **Auth:** Authorize **both** `ZoomifyAuth` and `EncryptedOpenRouterKey` in Swagger.
 
-    **Response events:** `session`, `user`, `trail`, `assistant`, `schema`, `error`, `done`.
+    **Response events:** `session`, `user`, `trail`, `assistant`, `schema`, `error`, `cancelled`, `done`.
 
     Each successful request counts as one extraction against your daily plan limit.
     """
@@ -260,9 +285,9 @@ async def query(
         if raw:
             image_bytes = raw
 
-    def event_stream():
+    async def event_stream():
         yield json.dumps({"type": "session", "session_id": sid}) + "\n"
-        for event in run_query_stream(
+        stream = run_query_stream(
             session=session,
             query=query,
             image_bytes=image_bytes,
@@ -270,11 +295,20 @@ async def query(
             model=model,
             schema_param=schema_param,
             structured=structured,
-        ):
-            if event.get("type") == "error":
+        )
+        try:
+            for event in stream:
+                if await request.is_disconnected():
+                    yield json.dumps({"type": "cancelled"}) + "\n"
+                    return
+                if event.get("type") == "error":
+                    yield json.dumps(event) + "\n"
+                    return
                 yield json.dumps(event) + "\n"
-                return
-            yield json.dumps(event) + "\n"
+        finally:
+            close = getattr(stream, "close", None)
+            if callable(close):
+                close()
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 

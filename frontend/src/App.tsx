@@ -1,10 +1,13 @@
 import {
 	type FormEvent,
+	type ClipboardEvent as ReactClipboardEvent,
+	type KeyboardEvent as ReactKeyboardEvent,
 	useCallback,
 	useEffect,
 	useRef,
 	useState,
 } from "react";
+import { createPortal } from "react-dom";
 import "./App.css";
 import {
 	ApiKeyInvalidError,
@@ -18,6 +21,10 @@ import {
 	rememberKeyFingerprint,
 	validateStoredKey,
 } from "./byok";
+import {
+	imageFileFromClipboard,
+	isClipboardPasteTargetAllowed,
+} from "./clipboardImage";
 import ApiKeyField from "./components/ApiKeyField";
 import MarkdownMessage from "./components/MarkdownMessage";
 import ModelCombobox from "./components/ModelCombobox";
@@ -31,6 +38,11 @@ import {
 	resolveModelPreference,
 	setStoredModel,
 } from "./modelPreference";
+import {
+	fetchSampleImageFile,
+	SAMPLE_IMAGE_FILENAME,
+	SAMPLE_IMAGE_URL,
+} from "./sampleImage";
 
 const DEFAULT_PROMPT =
 	"Extract the key information from this image; zoom in to read any small text.";
@@ -81,6 +93,7 @@ export default function App() {
 	const [query, setQuery] = useState("");
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
+	const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
 	const [models, setModels] = useState<string[]>([]);
 	const [model, setModel] = useState(() => getStoredModel() ?? "");
 	const [sessionId, setSessionId] = useState<string | null>(null);
@@ -92,8 +105,11 @@ export default function App() {
 	const [schemaCtaLeaving, setSchemaCtaLeaving] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [mobileView, setMobileView] = useState<"chat" | "tree">("chat");
+	const [showHomeEmpty, setShowHomeEmpty] = useState(true);
 	const schemaCtaDismissedRef = useRef(false);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+	const queryAbortRef = useRef<AbortController | null>(null);
 
 	const dismissSchemaCta = useCallback(() => {
 		if (schemaCtaDismissedRef.current) return;
@@ -132,6 +148,10 @@ export default function App() {
 	const onModelChange = useCallback((next: string) => {
 		setModel(next);
 		setStoredModel(next);
+	}, []);
+
+	const dismissHomeEmpty = useCallback(() => {
+		setShowHomeEmpty(false);
 	}, []);
 
 	useEffect(() => {
@@ -183,17 +203,93 @@ export default function App() {
 		return () => URL.revokeObjectURL(url);
 	}, [image]);
 
-	const onImageChange = (file: File | undefined) => {
-		if (!file) {
-			setImage(null);
-			return;
+	const onImageChange = useCallback(
+		(file: File | undefined) => {
+			if (!file) {
+				setImage(null);
+				return;
+			}
+			if (!file.type.startsWith("image/")) {
+				alert("Only image files are accepted.");
+				return;
+			}
+			setImage(file);
+			dismissHomeEmpty();
+		},
+		[dismissHomeEmpty],
+	);
+
+	const selectSampleImage = useCallback(async () => {
+		if (busy) return;
+		try {
+			setImage(await fetchSampleImageFile());
+			dismissHomeEmpty();
+		} catch {
+			// Sample is optional if the static asset is unavailable.
 		}
-		if (!file.type.startsWith("image/")) {
-			alert("Only image files are accepted.");
-			return;
+	}, [busy, dismissHomeEmpty]);
+
+	const onQueryChange = (value: string) => {
+		if (showHomeEmpty && value.trim().length > 0) {
+			dismissHomeEmpty();
 		}
-		setImage(file);
+		setQuery(value);
 	};
+
+	const attachClipboardImage = useCallback(
+		(data: DataTransfer | null) => {
+			const file = imageFileFromClipboard(data);
+			if (!file) return false;
+			onImageChange(file);
+			return true;
+		},
+		[onImageChange],
+	);
+
+	const onComposerPaste = (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
+		if (busy) return;
+		if (attachClipboardImage(event.clipboardData)) {
+			event.preventDefault();
+		}
+	};
+
+	const onComposerKeyDown = (
+		event: ReactKeyboardEvent<HTMLTextAreaElement>,
+	) => {
+		if (event.key !== "Enter" || event.shiftKey) return;
+		event.preventDefault();
+		if (busy || (!query.trim() && !image)) return;
+		event.currentTarget.form?.requestSubmit();
+	};
+
+	useEffect(() => {
+		if (!hasKey || busy) return;
+
+		const onPaste = (event: ClipboardEvent) => {
+			if (!isClipboardPasteTargetAllowed(event.target)) return;
+			if (attachClipboardImage(event.clipboardData)) {
+				event.preventDefault();
+			}
+		};
+
+		document.addEventListener("paste", onPaste);
+		return () => document.removeEventListener("paste", onPaste);
+	}, [hasKey, busy, attachClipboardImage]);
+
+	const clearAttachedImage = useCallback(() => {
+		setImage(null);
+		setImagePreviewOpen(false);
+		if (fileInputRef.current) fileInputRef.current.value = "";
+	}, []);
+
+	useEffect(() => {
+		if (!imagePreviewOpen) return;
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") setImagePreviewOpen(false);
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [imagePreviewOpen]);
 
 	const resetSession = async () => {
 		if (sessionId) {
@@ -203,8 +299,13 @@ export default function App() {
 		setMessages([]);
 		setTrailHtml("");
 		setQuery("");
-		setImage(null);
 		setSchemaInfo("");
+		setShowHomeEmpty(true);
+		clearAttachedImage();
+	};
+
+	const onStop = () => {
+		queryAbortRef.current?.abort();
 	};
 
 	const onSubmit = async (e: FormEvent) => {
@@ -212,6 +313,10 @@ export default function App() {
 		if (busy) return;
 		const text = query.trim();
 		if (!text && !image) return;
+
+		queryAbortRef.current?.abort();
+		const abortController = new AbortController();
+		queryAbortRef.current = abortController;
 
 		setBusy(true);
 		setSchemaInfo("");
@@ -222,6 +327,7 @@ export default function App() {
 				image,
 				model,
 				sessionId,
+				signal: abortController.signal,
 			})) {
 				if (event.type === "session") {
 					setSessionId(event.session_id);
@@ -249,12 +355,17 @@ export default function App() {
 						{ id: nextMessageId(), role: "assistant", content: event.message },
 					]);
 					break;
+				} else if (event.type === "cancelled") {
+					break;
 				} else if (event.type === "done") {
 					setQuery("");
-					setImage(null);
+					clearAttachedImage();
 				}
 			}
 		} catch (err) {
+			if (err instanceof DOMException && err.name === "AbortError") {
+				return;
+			}
 			setMessages((prev) => [
 				...prev,
 				{
@@ -264,6 +375,9 @@ export default function App() {
 				},
 			]);
 		} finally {
+			if (queryAbortRef.current === abortController) {
+				queryAbortRef.current = null;
+			}
 			setBusy(false);
 		}
 	};
@@ -352,17 +466,34 @@ export default function App() {
 					</div>
 
 					<div className="messages">
-						{messages.length === 0 && (
+						{messages.length === 0 && showHomeEmpty && (
 							<div className="empty-state">
 								<div className="empty-brand">
 									<ZoomifyLogo size={72} className="empty-logo" decorative />
 									<p className="empty-brand-name">Zoomify</p>
 								</div>
-								<p className="empty-title">Upload &amp; ask</p>
+								<p className="empty-title">Try a sample image</p>
 								<p className="hint">
-									Attach a high-resolution map, diagram, or scan. Zoomify grids
-									the image and zooms into the details for you.
+									Click the demo image below to attach it, add your OpenRouter
+									key, ask a question, and send. Or use the paperclip / paste
+									with <kbd className="kbd-hint">⌘V</kbd> /{" "}
+									<kbd className="kbd-hint">Ctrl+V</kbd>.
 								</p>
+								<button
+									type="button"
+									className="empty-sample"
+									onClick={() => void selectSampleImage()}
+									disabled={busy}
+									title="Use sample image"
+									aria-label="Use sample image"
+								>
+									<span className="empty-sample-frame">
+										<img src={SAMPLE_IMAGE_URL} alt="" />
+									</span>
+									<span className="empty-sample-caption">
+										Click to attach · {SAMPLE_IMAGE_FILENAME}
+									</span>
+								</button>
 							</div>
 						)}
 						{messages.map((m) => (
@@ -394,14 +525,36 @@ export default function App() {
 							<form onSubmit={onSubmit}>
 								{imagePreview && (
 									<div className="composer-preview">
-										<img src={imagePreview} alt="Attached preview" />
+										<div className="composer-preview-chip">
+											<button
+												type="button"
+												className="composer-preview-thumb"
+												onClick={() => setImagePreviewOpen(true)}
+												title="View full image"
+												aria-label="View attached image full size"
+											>
+												<img src={imagePreview} alt="" />
+											</button>
+											<button
+												type="button"
+												className="composer-preview-remove"
+												onClick={clearAttachedImage}
+												disabled={busy}
+												title="Remove image"
+												aria-label="Remove attached image"
+											>
+												×
+											</button>
+										</div>
 									</div>
 								)}
 								<div className="composer-box">
 									<textarea
 										value={query}
-										onChange={(e) => setQuery(e.target.value)}
-										placeholder="What should we extract from this image?"
+										onChange={(e) => onQueryChange(e.target.value)}
+										onPaste={onComposerPaste}
+										onKeyDown={onComposerKeyDown}
+										placeholder="What should we extract from this image? Enter to send, Shift+Enter for new line."
 										rows={3}
 										disabled={busy}
 									/>
@@ -436,36 +589,40 @@ export default function App() {
 													/>
 												</svg>
 												<input
+													ref={fileInputRef}
 													type="file"
 													accept="image/*"
 													onChange={(e) => onImageChange(e.target.files?.[0])}
 													disabled={busy}
 												/>
 											</label>
-											<button
-												type="submit"
-												className="composer-icon-btn composer-send"
-												title={busy ? "Extracting…" : "Send"}
-												aria-label={busy ? "Extracting" : "Send"}
-												disabled={busy || (!query.trim() && !image)}
-											>
-												{busy ? (
-													<svg
-														viewBox="0 0 24 24"
-														className="spin"
-														aria-hidden="true"
-													>
-														<circle
-															cx="12"
-															cy="12"
-															r="9"
-															fill="none"
-															stroke="currentColor"
-															strokeWidth="2"
-															strokeDasharray="28 56"
+											{busy ? (
+												<button
+													type="button"
+													className="composer-icon-btn composer-stop"
+													title="Stop extraction"
+													aria-label="Stop extraction"
+													onClick={onStop}
+												>
+													<svg viewBox="0 0 24 24" aria-hidden="true">
+														<rect
+															x="7"
+															y="7"
+															width="10"
+															height="10"
+															rx="1.5"
+															fill="currentColor"
 														/>
 													</svg>
-												) : (
+												</button>
+											) : (
+												<button
+													type="submit"
+													className="composer-icon-btn composer-send"
+													title="Send"
+													aria-label="Send"
+													disabled={!query.trim() && !image}
+												>
 													<svg viewBox="0 0 24 24" aria-hidden="true">
 														<path
 															d="M5 12h12M13 7l5 5-5 5"
@@ -476,8 +633,8 @@ export default function App() {
 															strokeLinejoin="round"
 														/>
 													</svg>
-												)}
-											</button>
+												</button>
+											)}
 										</div>
 									</div>
 								</div>
@@ -496,6 +653,39 @@ export default function App() {
 					<TrailHost html={trailHtml} />
 				</section>
 			</main>
+			{imagePreviewOpen &&
+				imagePreview &&
+				createPortal(
+					<div
+						className="zmodal"
+						role="dialog"
+						aria-modal="true"
+						aria-label="Attached image preview"
+					>
+						<button
+							type="button"
+							className="zbackdrop"
+							aria-label="Close preview"
+							onClick={() => setImagePreviewOpen(false)}
+						/>
+						<div className="zcontent">
+							<button
+								type="button"
+								className="zclose"
+								aria-label="Close preview"
+								onClick={() => setImagePreviewOpen(false)}
+							>
+								×
+							</button>
+							<img
+								src={imagePreview}
+								alt={image?.name || "Attached upload preview"}
+							/>
+							{image?.name && <div className="zcap">{image.name}</div>}
+						</div>
+					</div>,
+					document.body,
+				)}
 		</div>
 	);
 }

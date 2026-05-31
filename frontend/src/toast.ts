@@ -2,7 +2,8 @@ export type ToastVariant = "error" | "info" | "success";
 
 export type ToastAction = {
 	label: string;
-	href: string;
+	href?: string;
+	onClick?: () => void;
 };
 
 export type ToastItem = {
@@ -35,11 +36,30 @@ function emit() {
 	}
 }
 
-function removeToast(id: string) {
-	toasts = toasts.filter((t) => t.id !== id);
+function clearToastTimers(id: string) {
+	const fadeTimer = timers.get(id);
+	const removeTimer = timers.get(`${id}:remove`);
+	if (fadeTimer) clearTimeout(fadeTimer);
+	if (removeTimer) clearTimeout(removeTimer);
 	timers.delete(id);
 	timers.delete(`${id}:remove`);
+}
+
+function removeToast(id: string) {
+	toasts = toasts.filter((t) => t.id !== id);
+	clearToastTimers(id);
 	emit();
+}
+
+export function dismissToast(id: string) {
+	const item = toasts.find((t) => t.id === id);
+	if (!item || item.leaving) return;
+
+	clearToastTimers(id);
+	toasts = toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t));
+	emit();
+
+	setTimeout(() => removeToast(id), FADE_MS);
 }
 
 export function subscribeToasts(listener: Listener): () => void {

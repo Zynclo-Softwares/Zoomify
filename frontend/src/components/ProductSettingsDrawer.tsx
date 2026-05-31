@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { openSchemaContact } from "../schemaContact";
 import SubscriptionBanner from "./SubscriptionBanner";
+import "./SchemaContactModal.css";
 import ZoomifyLogo from "./ZoomifyLogo";
 
 type ProductSettingsDrawerProps = {
@@ -100,9 +102,13 @@ export default function ProductSettingsDrawer({
 								<p>
 									Tell us your use case — Zynclo designs custom extraction
 									schemas for your documents.{" "}
-									<a href="https://github.com/Zynclo-Softwares/Zoomify/issues/new">
+									<button
+										type="button"
+										className="schema-contact-trigger"
+										onClick={openSchemaContact}
+									>
 										Request schema →
-									</a>
+									</button>
 								</p>
 							</div>
 						</aside>

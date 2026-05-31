@@ -1,0 +1,160 @@
+.schema-modal-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 10060;
+	display: grid;
+	place-items: center;
+	padding: 1rem;
+}
+
+.schema-modal-backdrop-btn {
+	position: absolute;
+	inset: 0;
+	border: none;
+	padding: 0;
+	background: rgba(2, 6, 23, 0.72);
+	backdrop-filter: blur(4px);
+	cursor: pointer;
+}
+
+.schema-modal-backdrop-btn:disabled {
+	cursor: default;
+}
+
+.schema-modal {
+	position: relative;
+	z-index: 1;
+	width: min(100%, 28rem);
+	padding: 1.25rem 1.25rem 1.1rem;
+	border-color: rgba(56, 189, 248, 0.28);
+	background: linear-gradient(
+		160deg,
+		rgba(30, 58, 138, 0.35),
+		rgba(15, 23, 42, 0.96)
+	);
+}
+
+.schema-modal-close {
+	position: absolute;
+	top: 0.55rem;
+	right: 0.55rem;
+	width: 2rem;
+	height: 2rem;
+	border: none;
+	border-radius: 8px;
+	background: rgba(51, 65, 85, 0.45);
+	color: #cbd5e1;
+	font-size: 1.25rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.schema-modal-close:hover:not(:disabled) {
+	background: rgba(71, 85, 105, 0.65);
+	color: #f8fafc;
+}
+
+.schema-modal-kicker {
+	margin: 0 0 0.35rem;
+	font-size: 0.72rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: #7dd3fc;
+}
+
+.schema-modal h2 {
+	margin: 0 0 0.5rem;
+	font-size: 1.2rem;
+	letter-spacing: -0.02em;
+}
+
+.schema-modal-lead {
+	margin: 0 0 1rem;
+	color: #94a3b8;
+	font-size: 0.88rem;
+	line-height: 1.55;
+}
+
+.schema-modal-form {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+.schema-modal-form label {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	font-size: 0.82rem;
+	color: #cbd5e1;
+}
+
+.schema-modal-form input,
+.schema-modal-form textarea {
+	width: 100%;
+	padding: 0.55rem 0.65rem;
+	border-radius: 10px;
+	border: 1px solid rgba(148, 163, 184, 0.22);
+	background: #334155;
+	color: #f8fafc;
+	font: inherit;
+}
+
+.schema-modal-form textarea {
+	resize: vertical;
+	min-height: 6rem;
+}
+
+.schema-modal-form input:focus,
+.schema-modal-form textarea:focus {
+	outline: none;
+	border-color: rgba(56, 189, 248, 0.55);
+	box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+}
+
+.schema-modal-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.5rem;
+	margin-top: 0.25rem;
+}
+
+.schema-modal-actions .btn {
+	min-width: 6.5rem;
+}
+
+.schema-contact-trigger {
+	border: none;
+	background: none;
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.schema-contact-trigger:hover {
+	color: #7dd3fc;
+}
+
+.pricing-card .schema-contact-trigger.pricing-cta {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	padding: 0.65rem 1rem;
+	border-radius: 10px;
+	border: 1px solid rgba(148, 163, 184, 0.22);
+	text-decoration: none;
+}
+
+.pricing-card .schema-contact-trigger.pricing-cta.ghost {
+	background: rgba(51, 65, 85, 0.35);
+	color: #e2e8f0;
+}
+
+.pricing-card .schema-contact-trigger.pricing-cta.ghost:hover {
+	background: rgba(51, 65, 85, 0.55);
+	color: #f8fafc;
+}

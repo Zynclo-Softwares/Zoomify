@@ -30,6 +30,7 @@ export type StreamEvent =
 			source: string;
 	  }
 	| { type: "error"; message: string }
+	| { type: "cancelled" }
 	| { type: "done" };
 
 type FetchOptions = RequestInit & { silent?: boolean };
@@ -185,11 +186,45 @@ export async function deleteSession(sessionId: string): Promise<void> {
 	});
 }
 
+export type SchemaInquiryPayload = {
+	name: string;
+	email: string;
+	message: string;
+};
+
+export type SchemaInquiryResponse = {
+	issue_number: number;
+	issue_url: string;
+	title: string;
+};
+
+export async function submitSchemaInquiry(
+	payload: SchemaInquiryPayload,
+): Promise<SchemaInquiryResponse> {
+	const res = await fetch("/api/schema-inquiry", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(payload),
+	});
+	if (!res.ok) {
+		const message = await readApiErrorMessage(res);
+		showErrorToast(message);
+		throw new ApiError(message, res.status);
+	}
+	return res.json();
+}
+
+function isQueryAbortError(err: unknown, signal?: AbortSignal): boolean {
+	if (signal?.aborted) return true;
+	return err instanceof DOMException && err.name === "AbortError";
+}
+
 export async function* streamQuery(params: {
 	query: string;
 	image?: File | null;
 	model: string;
 	sessionId?: string | null;
+	signal?: AbortSignal;
 }): AsyncGenerator<StreamEvent> {
 	const form = new FormData();
 	form.append("query", params.query);
@@ -199,8 +234,13 @@ export async function* streamQuery(params: {
 
 	let res: Response;
 	try {
-		res = await fetchWithAuth("/api/query", { method: "POST", body: form });
+		res = await fetchWithAuth("/api/query", {
+			method: "POST",
+			body: form,
+			signal: params.signal,
+		});
 	} catch (err) {
+		if (isQueryAbortError(err, params.signal)) return;
 		if (err instanceof ApiError) throw err;
 		throw err;
 	}
@@ -215,18 +255,25 @@ export async function* streamQuery(params: {
 	const decoder = new TextDecoder();
 	let buffer = "";
 
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		buffer += decoder.decode(value, { stream: true });
-		const lines = buffer.split("\n");
-		buffer = lines.pop() ?? "";
-		for (const line of lines) {
-			if (!line.trim()) continue;
-			yield JSON.parse(line) as StreamEvent;
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+			const lines = buffer.split("\n");
+			buffer = lines.pop() ?? "";
+			for (const line of lines) {
+				if (!line.trim()) continue;
+				yield JSON.parse(line) as StreamEvent;
+			}
 		}
-	}
-	if (buffer.trim()) {
-		yield JSON.parse(buffer) as StreamEvent;
+		if (buffer.trim()) {
+			yield JSON.parse(buffer) as StreamEvent;
+		}
+	} catch (err) {
+		if (isQueryAbortError(err, params.signal)) return;
+		throw err;
+	} finally {
+		reader.releaseLock();
 	}
 }

@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { isClerkConfigured } from "./auth";
 import { clerkAppearance } from "./clerkTheme";
 import PageLoading from "./components/PageLoading";
+import SchemaContactHost from "./components/SchemaContactHost";
 import "./global.css";
 import ToastHost from "./components/ToastHost";
 import LandingPage from "./pages/LandingPage";
@@ -20,6 +21,7 @@ const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ?? "";
 const routes = (
 	<BrowserRouter>
 		<ToastHost />
+		<SchemaContactHost />
 		<Suspense fallback={<PageLoading />}>
 			<Routes>
 				<Route path="/" element={<LandingPage />} />
