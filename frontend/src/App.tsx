@@ -107,7 +107,7 @@ export default function App() {
 	const [mobileView, setMobileView] = useState<"chat" | "tree">("chat");
 	const [showHomeEmpty, setShowHomeEmpty] = useState(true);
 	const schemaCtaDismissedRef = useRef(false);
-	const messagesEndRef = useRef<HTMLDivElement>(null);
+	const messagesRef = useRef<HTMLDivElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const queryAbortRef = useRef<AbortController | null>(null);
 
@@ -190,7 +190,9 @@ export default function App() {
 
 	useEffect(() => {
 		if (messages.length === 0 && !busy) return;
-		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+		const el = messagesRef.current;
+		if (!el) return;
+		el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
 	}, [messages.length, busy]);
 
 	useEffect(() => {
@@ -465,7 +467,7 @@ export default function App() {
 						</div>
 					</div>
 
-					<div className="messages">
+					<div className="messages" ref={messagesRef}>
 						{messages.length === 0 && showHomeEmpty && (
 							<div className="empty-state">
 								<div className="empty-brand">
@@ -513,7 +515,6 @@ export default function App() {
 								</div>
 							</div>
 						))}
-						<div ref={messagesEndRef} />
 					</div>
 
 					<div className="composer">
