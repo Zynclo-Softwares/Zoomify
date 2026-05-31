@@ -14,8 +14,13 @@ from fastapi.staticfiles import StaticFiles
 
 from zoomify.billing import billing_plans_payload, enforce_query_quota, record_query_usage
 from zoomify.byok_crypto import HEADER_NAME, decrypt_api_key, is_byok_ready, public_key_pem
-from zoomify.clerk_auth import is_clerk_enabled, require_clerk_user
+from zoomify.clerk_auth import is_clerk_enabled, require_clerk_user, require_user
 from zoomify.db import ensure_indexes, mongodb_database_name, mongodb_enabled, user_billing_status
+from zoomify.platform_keys import (
+    create_platform_key,
+    platform_key_status,
+    rotate_platform_key,
+)
 from zoomify.openrouter_models import model_dropdown_update
 from zoomify.query_runner import run_query_stream
 from zoomify.session import store
@@ -110,9 +115,33 @@ def billing_plans():
 
 
 @app.get("/api/billing/status", tags=["billing"])
-def billing_status(user: dict = Depends(require_clerk_user)):
+def billing_status(user: dict = Depends(require_user)):
     """Current plan and daily extraction usage for the signed-in user."""
     return user_billing_status(_user_id(user))
+
+
+@app.get("/api/platform-key", tags=["auth"])
+def get_platform_key(user: dict = Depends(require_clerk_user)):
+    """Whether the user has a Zoomify platform API key (prefix only — never the secret)."""
+    return platform_key_status(_user_id(user))
+
+
+@app.post("/api/platform-key", tags=["auth"])
+def post_platform_key(user: dict = Depends(require_clerk_user)):
+    """Create the user's single platform API key. The full key is returned once."""
+    try:
+        return create_platform_key(_user_id(user))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/platform-key/rotate", tags=["auth"])
+def rotate_platform_key_route(user: dict = Depends(require_clerk_user)):
+    """Replace the user's platform API key. The new key is returned once."""
+    try:
+        return rotate_platform_key(_user_id(user))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/api/billing/webhook", tags=["billing"])
@@ -129,7 +158,7 @@ async def billing_webhook(request: Request):
 
 @app.get("/api/models", tags=["query"])
 def list_models(
-    _user: dict = Depends(require_clerk_user),
+    _user: dict = Depends(require_user),
     api_key: str = Depends(require_openrouter_key),
 ):
     upd = model_dropdown_update(api_key=api_key)
@@ -144,7 +173,7 @@ async def query(
     structured: bool = Form(True),
     session_id: str | None = Form(None),
     image: UploadFile | None = File(None),
-    user: dict = Depends(require_clerk_user),
+    user: dict = Depends(require_user),
     api_key: str = Depends(require_openrouter_key),
 ):
     """Stream agent progress as NDJSON (one JSON object per line).
@@ -187,7 +216,7 @@ async def query(
 
 
 @app.delete("/api/session/{session_id}", tags=["query"])
-def delete_session(session_id: str, _user: dict = Depends(require_clerk_user)):
+def delete_session(session_id: str, _user: dict = Depends(require_user)):
     store.delete(session_id)
     return {"ok": True}
 

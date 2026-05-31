@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from zoomify.plans import PlanId, plan_for_id
+from zoomify.platform_keys import ensure_platform_key_indexes
 
 DEFAULT_DB_NAME = "Zoomify"
 USERS = "users"
@@ -65,6 +66,7 @@ def ensure_indexes() -> None:
         users.create_index("stripeCustomerId")
     if usage is not None:
         usage.create_index([("clerkUserId", 1), ("date", 1)], unique=True)
+    ensure_platform_key_indexes()
 
 
 def get_user(clerk_user_id: str) -> dict[str, Any]:

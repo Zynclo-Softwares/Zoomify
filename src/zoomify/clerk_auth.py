@@ -10,6 +10,7 @@ import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
+from zoomify.platform_keys import is_platform_key, lookup_clerk_user_by_platform_key
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -57,14 +58,36 @@ async def require_clerk_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> dict[str, Any]:
     """FastAPI dependency — require a valid Clerk session when auth is enabled."""
+    user = await require_user(creds)
+    if user.get("auth") == "platform_key":
+        raise HTTPException(
+            status_code=403,
+            detail="Clerk session required for this endpoint",
+        )
+    return user
+
+
+async def require_user(
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> dict[str, Any]:
+    """Accept Clerk session JWT or Zoomify platform API key (``zfy_live_...``)."""
     if not is_clerk_enabled():
         return {"sub": "dev-local", "bypass": True}
 
     if creds is None or creds.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail="Authentication required")
 
+    token = creds.credentials.strip()
+    if is_platform_key(token):
+        clerk_id = lookup_clerk_user_by_platform_key(token)
+        if not clerk_id:
+            raise HTTPException(status_code=401, detail="Invalid or revoked API key")
+        return {"sub": clerk_id, "auth": "platform_key"}
+
     try:
-        return verify_clerk_token(creds.credentials)
+        claims = verify_clerk_token(token)
+        claims["auth"] = "clerk"
+        return claims
     except jwt.PyJWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired session") from exc
     except Exception as exc:
