@@ -8,6 +8,7 @@ import pytest
 from zoomify.openrouter_models import (
     DEFAULT_MODEL,
     FALLBACK_VISION_MODELS,
+    check_openrouter_health,
     fetch_vision_models,
     model_dropdown_update,
     reset_cache,
@@ -115,3 +116,22 @@ def test_model_dropdown_update_shape(monkeypatch):
     upd = model_dropdown_update()
     assert upd["choices"] == ["alpha/model", DEFAULT_MODEL]
     assert upd["value"] == DEFAULT_MODEL
+
+
+def test_check_openrouter_health_ok(monkeypatch):
+    monkeypatch.setattr(
+        "zoomify.openrouter_models._http_get_json",
+        lambda url, api_key: {"data": {"label": "ok"}},
+    )
+    assert check_openrouter_health(api_key="sk-test") == {"ok": True}
+
+
+def test_check_openrouter_health_invalid_key(monkeypatch):
+    import urllib.error
+
+    def boom(url, api_key):
+        raise urllib.error.HTTPError(url, 401, "Unauthorized", hdrs=None, fp=None)
+
+    monkeypatch.setattr("zoomify.openrouter_models._http_get_json", boom)
+    result = check_openrouter_health(api_key="sk-bad")
+    assert result == {"ok": False, "detail": "Invalid OpenRouter API key"}

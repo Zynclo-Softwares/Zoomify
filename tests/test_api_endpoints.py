@@ -29,6 +29,21 @@ def test_health_extended_fields(client):
     assert data["stripe_webhook_configured"] is False
 
 
+def test_openrouter_health_ok(client, monkeypatch, byok_headers):
+    monkeypatch.setattr(
+        "server.check_openrouter_health",
+        lambda api_key: {"ok": True},
+    )
+    r = client.get("/api/openrouter/health", headers=byok_headers)
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+
+
+def test_openrouter_health_requires_key(client):
+    r = client.get("/api/openrouter/health")
+    assert r.status_code == 401
+
+
 def test_byok_public_key(client, byok_headers):
     r = client.get("/api/byok/public-key")
     assert r.status_code == 200
@@ -72,9 +87,29 @@ def test_delete_session(client):
 def test_openapi_and_redoc(client):
     openapi = client.get("/api/openapi.json")
     assert openapi.status_code == 200
-    paths = openapi.json()["paths"]
+    spec = openapi.json()
+    paths = spec["paths"]
     assert "/api/query" in paths
     assert "/api/billing/plans" in paths
+
+    schemes = spec["components"]["securitySchemes"]
+    assert "ZoomifyAuth" in schemes
+    assert "EncryptedOpenRouterKey" in schemes
+    assert schemes["EncryptedOpenRouterKey"]["name"] == "X-Encrypted-Api-Key"
+    assert "zfy_live" in schemes["ZoomifyAuth"]["description"]
+
+    assert "platform key" in spec["info"]["description"].lower()
+    assert "X-Encrypted-Api-Key" in spec["info"]["description"]
+
+    query_op = paths["/api/query"]["post"]
+    assert query_op["security"] == [
+        {"ZoomifyAuth": [], "EncryptedOpenRouterKey": []},
+    ]
+    form_schema = spec["components"]["schemas"]["Body_query_api_query_post"]
+    assert "query" in form_schema["properties"]
+    assert form_schema["properties"]["query"]["examples"] == [
+        "Read all part numbers and quantities"
+    ]
 
     redoc = client.get("/api/redoc")
     assert redoc.status_code == 200

@@ -1,23 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import {
-	clearStoredApiKey,
-	fetchByokPublicKey,
-	hasStoredApiKey,
-	saveApiKey,
-} from "../byok";
+import { fetchByokPublicKey, saveApiKey } from "../byok";
 
 type Props = {
 	disabled?: boolean;
-	changing?: boolean;
 	onKeyChange?: (hasKey: boolean) => void;
 };
 
-export default function ApiKeyField({
-	disabled = false,
-	changing = false,
-	onKeyChange,
-}: Props) {
-	const [saved, setSaved] = useState(hasStoredApiKey());
+export default function ApiKeyField({ disabled = false, onKeyChange }: Props) {
 	const [draft, setDraft] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
@@ -30,24 +19,17 @@ export default function ApiKeyField({
 	}, []);
 
 	useEffect(() => {
-		if (!changing || disabled || busy) return;
+		if (disabled || busy) return;
 		inputRef.current?.focus();
-	}, [changing, disabled, busy]);
+	}, [disabled, busy]);
 
 	const notify = (hasKey: boolean) => {
-		setSaved(hasKey);
 		onKeyChange?.(hasKey);
 	};
 
 	const persistKey = async () => {
 		setError("");
-		if (!draft.trim()) {
-			if (!saved) return;
-			clearStoredApiKey();
-			setDraft("");
-			notify(false);
-			return;
-		}
+		if (!draft.trim()) return;
 		setBusy(true);
 		try {
 			await saveApiKey(draft);
@@ -60,62 +42,49 @@ export default function ApiKeyField({
 		}
 	};
 
-	const clearKey = () => {
-		clearStoredApiKey();
-		setDraft("");
-		setError("");
-		notify(false);
-	};
-
 	return (
-		<div className="field field-key">
-			<div className="field-label-row">
-				<label htmlFor="openrouter-api-key">OpenRouter key</label>
+		<div className="openrouter-key-form openrouter-key-form-composer">
+			<div className="openrouter-key-head">
+				<p className="openrouter-key-lead">
+					Add your OpenRouter key to start extracting from images.
+				</p>
 				<a
-					className="field-external-link"
+					className="openrouter-key-link"
 					href="https://openrouter.ai/keys"
 					target="_blank"
 					rel="noopener noreferrer"
 				>
-					openrouter.ai
+					Get a key at openrouter.ai
 				</a>
 			</div>
-			<div className="key-row">
+			<div className="openrouter-key-row">
 				<input
 					ref={inputRef}
 					id="openrouter-api-key"
+					className="openrouter-key-input"
 					type="password"
 					value={draft}
 					onChange={(e) => setDraft(e.target.value)}
-					onBlur={() => void persistKey()}
 					onKeyDown={(e) => {
 						if (e.key === "Enter") {
 							e.preventDefault();
 							void persistKey();
 						}
 					}}
-					placeholder="Open router api key"
+					placeholder="OpenRouter API key"
 					autoComplete="off"
 					spellCheck={false}
 					disabled={disabled || busy}
+					aria-label="OpenRouter API key"
 				/>
-				{saved && !draft && !changing ? (
-					<span className="status-pill ok key-status">Key ready</span>
-				) : (
-					<span className="status-pill warn key-status">
-						Add OpenRouter key
-					</span>
-				)}
-				{saved && !changing && (
-					<button
-						type="button"
-						className="btn ghost key-clear"
-						onClick={clearKey}
-						disabled={disabled || busy}
-					>
-						Clear
-					</button>
-				)}
+				<button
+					type="button"
+					className="btn primary openrouter-key-submit openrouter-key-submit-inline"
+					onClick={() => void persistKey()}
+					disabled={disabled || busy || !draft.trim()}
+				>
+					Add
+				</button>
 			</div>
 			{error && <p className="key-error">{error}</p>}
 		</div>

@@ -1,8 +1,8 @@
 import { useUser } from "@clerk/react";
 import { Link } from "react-router-dom";
 import { isClerkConfigured } from "../auth";
+import LandingNav from "../components/LandingNav";
 import PricingSection from "../components/PricingSection";
-import ZoomifyLogo from "../components/ZoomifyLogo";
 import "../pages/LandingPage.css";
 
 function PricingShell({ userId }: { userId?: string | null }) {
@@ -11,12 +11,8 @@ function PricingShell({ userId }: { userId?: string | null }) {
 			<div className="landing-glow landing-glow-a" aria-hidden />
 			<div className="landing-glow landing-glow-b" aria-hidden />
 
-			<header className="landing-nav">
-				<Link to="/" className="landing-brand">
-					<ZoomifyLogo size={36} />
-					<span>Zoomify</span>
-				</Link>
-				<nav className="landing-links">
+			<LandingNav>
+				<div className="landing-links-group">
 					<Link to="/" className="landing-link">
 						Home
 					</Link>
@@ -28,14 +24,8 @@ function PricingShell({ userId }: { userId?: string | null }) {
 					>
 						API docs
 					</a>
-					<Link to="/product" className="landing-btn ghost">
-						Product
-					</Link>
-					<Link to="/sign-up" className="landing-btn">
-						Get started
-					</Link>
-				</nav>
-			</header>
+				</div>
+			</LandingNav>
 
 			<main className="landing-pricing-main">
 				<PricingSection userId={userId} />

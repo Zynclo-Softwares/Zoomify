@@ -42,6 +42,26 @@ def _http_get_json(url: str, api_key: str | None = None) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def check_openrouter_health(*, api_key: str) -> dict:
+    """Verify an OpenRouter API key against OpenRouter's auth endpoint."""
+    base = OPENROUTER_BASE_URL.rstrip("/")
+    url = f"{base}/auth/key"
+    try:
+        _http_get_json(url, api_key)
+        return {"ok": True}
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            return {"ok": False, "detail": "Invalid OpenRouter API key"}
+        return {"ok": False, "detail": f"OpenRouter returned HTTP {exc.code}"}
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        json.JSONDecodeError,
+        KeyError,
+    ):
+        return {"ok": False, "detail": "OpenRouter unreachable"}
+
+
 def fetch_vision_models(*, api_key: str | None = None, force_refresh: bool = False) -> list[str]:
     """Return OpenRouter model IDs for vision, tools, and structured JSON output."""
     global _CACHE

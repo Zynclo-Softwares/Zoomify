@@ -14,13 +14,65 @@
 	display: block;
 	padding: 0.75rem 0.9rem;
 	border-radius: 12px;
-	border: 1px solid rgba(248, 113, 113, 0.35);
-	background: rgba(69, 10, 10, 0.92);
-	color: #fecaca;
 	font-size: 0.85rem;
 	line-height: 1.45;
 	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
 	animation: toast-in 0.25s ease-out;
+	border: 1px solid transparent;
+}
+
+.toast-has-action {
+	pointer-events: auto;
+}
+
+.toast-message {
+	display: block;
+}
+
+.toast-error {
+	border-color: rgba(248, 113, 113, 0.35);
+	background: rgba(69, 10, 10, 0.92);
+	color: #fecaca;
+}
+
+.toast-info {
+	border-color: rgba(56, 189, 248, 0.35);
+	background: linear-gradient(
+		135deg,
+		rgba(30, 58, 138, 0.94),
+		rgba(15, 23, 42, 0.96)
+	);
+	color: #e0f2fe;
+}
+
+.toast-success {
+	border-color: rgba(52, 211, 153, 0.35);
+	background: rgba(6, 45, 27, 0.92);
+	color: #bbf7d0;
+}
+
+.toast-action {
+	pointer-events: auto;
+	display: inline-flex;
+	align-items: center;
+	margin-top: 0.6rem;
+	padding: 0.38rem 0.75rem;
+	border-radius: 8px;
+	border: 1px solid rgba(56, 189, 248, 0.45);
+	background: rgba(0, 85, 255, 0.22);
+	color: #f0f9ff;
+	font-size: 0.78rem;
+	font-weight: 600;
+	text-decoration: none;
+	transition:
+		background 0.15s ease,
+		border-color 0.15s ease;
+}
+
+.toast-action:hover {
+	background: rgba(0, 85, 255, 0.38);
+	border-color: rgba(125, 211, 252, 0.55);
+	color: #fff;
 }
 
 .toast-leaving {
