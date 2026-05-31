@@ -116,6 +116,18 @@ export type BillingStatus = {
 	current_period_end: string | null;
 };
 
+export type PlatformKeyStatus = {
+	has_key: boolean;
+	prefix: string | null;
+	created_at: string | null;
+};
+
+export type PlatformKeyCreated = {
+	key: string;
+	prefix: string;
+	created_at: string;
+};
+
 export async function fetchBillingPlans(): Promise<BillingPlansResponse> {
 	const res = await fetch("/api/billing/plans");
 	if (!res.ok) {
@@ -128,6 +140,23 @@ export async function fetchBillingPlans(): Promise<BillingPlansResponse> {
 
 export async function fetchBillingStatus(): Promise<BillingStatus> {
 	const res = await fetchWithAuth("/api/billing/status");
+	return res.json();
+}
+
+export async function fetchPlatformKeyStatus(): Promise<PlatformKeyStatus> {
+	const res = await fetchWithAuth("/api/platform-key");
+	return res.json();
+}
+
+export async function createPlatformKey(): Promise<PlatformKeyCreated> {
+	const res = await fetchWithAuth("/api/platform-key", { method: "POST" });
+	return res.json();
+}
+
+export async function rotatePlatformKey(): Promise<PlatformKeyCreated> {
+	const res = await fetchWithAuth("/api/platform-key/rotate", {
+		method: "POST",
+	});
 	return res.json();
 }
 

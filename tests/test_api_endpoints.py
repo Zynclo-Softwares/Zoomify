@@ -12,9 +12,13 @@ from zoomify.db import get_user, reset_memory_store
 
 @pytest.fixture(autouse=True)
 def _billing_memory():
+    from zoomify.platform_keys import reset_platform_key_store
+
     reset_memory_store()
+    reset_platform_key_store()
     yield
     reset_memory_store()
+    reset_platform_key_store()
 
 
 def test_health_extended_fields(client):
