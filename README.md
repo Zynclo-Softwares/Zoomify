@@ -83,8 +83,11 @@ Install [`uv`](https://docs.astral.sh/uv/) (`brew install uv` or
 
 ```bash
 make install                    # uv sync --dev + bun install in frontend/
-cp .env.example .env            # then edit — see Configuration below
+cp .env.example .env            # optional — see CONTRIBUTING.md for what you need
 ```
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full local-dev guide (zero-config
+pytest, optional `.env` tiers, and Clerk frontend setup).
 
 Generate a BYOK keypair once (paste the private PEM into `.env` as `BYOK_PRIVATE_KEY`):
 
