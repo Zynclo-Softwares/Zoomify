@@ -35,6 +35,12 @@ function openrouterLabel(
 	return detail || "Check failed";
 }
 
+function pillLabel(color: "ok" | "warn" | "error"): string {
+	if (color === "ok") return "Connected";
+	if (color === "error") return "Offline";
+	return "Connecting…";
+}
+
 export default function StatusIndicator({ hasKey }: Props) {
 	const [serverOk, setServerOk] = useState<CheckState>(null);
 	const [openrouterOk, setOpenrouterOk] = useState<CheckState>(null);
@@ -77,10 +83,13 @@ export default function StatusIndicator({ hasKey }: Props) {
 	return (
 		<div className="status-indicator">
 			<span
-				className={`status-dot ${color}`}
+				className={`status-pill status-pill-${color}`}
 				role="img"
 				aria-label={`Service status: ${statusLabel}`}
-			/>
+			>
+				<span className={`status-dot ${color}`} />
+				<span className="status-pill-label">{pillLabel(color)}</span>
+			</span>
 			<div className="status-tooltip" role="tooltip">
 				{tooltipLines.map((line) => (
 					<p key={line}>{line}</p>

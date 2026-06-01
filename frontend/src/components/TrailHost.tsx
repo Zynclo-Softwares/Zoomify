@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import FeatureIcon from "./FeatureIcon";
 
 type Preview = { src: string; cap: string };
 
 type Props = {
 	html: string;
+	variant?: "panel" | "inline";
 };
 
 function hasTrailCrumbs(html: string): boolean {
@@ -19,22 +19,29 @@ function emptyTrailMessage(html: string): string {
 	return "Breadcrumb trail appears as the agent zooms.";
 }
 
+function TrailInlineWaiting() {
+	return (
+		<div className="trail-inline-waiting" aria-live="polite">
+			<span className="trail-inline-waiting-dot" aria-hidden="true" />
+			<p>Zooming in on your image…</p>
+		</div>
+	);
+}
+
 function TrailEmptyState({ message }: { message: string }) {
 	return (
 		<div className="trail-empty">
-			<div className="trail-empty-icon" aria-hidden="true">
-				<FeatureIcon name="tree" />
-			</div>
 			<p className="trail-empty-title">Live zoom trail</p>
 			<p className="trail-empty-text">{message}</p>
 		</div>
 	);
 }
 
-export default function TrailHost({ html }: Props) {
+export default function TrailHost({ html, variant = "panel" }: Props) {
 	const hostRef = useRef<HTMLDivElement>(null);
 	const [preview, setPreview] = useState<Preview | null>(null);
 	const showCrumbs = hasTrailCrumbs(html);
+	const isInline = variant === "inline";
 
 	useEffect(() => {
 		if (!showCrumbs) return;
@@ -67,11 +74,21 @@ export default function TrailHost({ html }: Props) {
 		return () => document.removeEventListener("keydown", onKeyDown);
 	}, [preview]);
 
+	const hostClass = [
+		"trail-host",
+		showCrumbs ? "" : "trail-host--empty",
+		isInline ? "trail-host--inline" : "",
+	]
+		.filter(Boolean)
+		.join(" ");
+
 	return (
 		<>
-			<div className={`trail-host${showCrumbs ? "" : " trail-host--empty"}`}>
+			<div className={hostClass}>
 				{showCrumbs ? (
 					<div ref={hostRef} className="trail-host-inner" />
+				) : isInline ? (
+					<TrailInlineWaiting />
 				) : (
 					<TrailEmptyState message={emptyTrailMessage(html)} />
 				)}

@@ -1,4 +1,15 @@
 import {
+	ArrowRight,
+	Image,
+	KeyRound,
+	MessageCircle,
+	MessagesSquare,
+	Paperclip,
+	RefreshCw,
+	Settings,
+	Square,
+} from "lucide-react";
+import {
 	type FormEvent,
 	type ClipboardEvent as ReactClipboardEvent,
 	type KeyboardEvent as ReactKeyboardEvent,
@@ -52,37 +63,6 @@ function nextMessageId(): string {
 	return crypto.randomUUID();
 }
 
-function PanelViewToggle({
-	mobileView,
-	onChange,
-}: {
-	mobileView: "chat" | "tree";
-	onChange: (view: "chat" | "tree") => void;
-}) {
-	return (
-		<div className="panel-view-toggle" role="tablist" aria-label="Workspace">
-			<button
-				type="button"
-				role="tab"
-				className={mobileView === "chat" ? "active" : ""}
-				aria-selected={mobileView === "chat"}
-				onClick={() => onChange("chat")}
-			>
-				Chat
-			</button>
-			<button
-				type="button"
-				role="tab"
-				className={mobileView === "tree" ? "active" : ""}
-				aria-selected={mobileView === "tree"}
-				onClick={() => onChange("tree")}
-			>
-				Tree
-			</button>
-		</div>
-	);
-}
-
 export default function App() {
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [trailHtml, setTrailHtml] = useState("");
@@ -100,7 +80,6 @@ export default function App() {
 	const [schemaCtaVisible, setSchemaCtaVisible] = useState(true);
 	const [schemaCtaLeaving, setSchemaCtaLeaving] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
-	const [mobileView, setMobileView] = useState<"chat" | "tree">("chat");
 	const [showHomeEmpty, setShowHomeEmpty] = useState(true);
 	const schemaCtaDismissedRef = useRef(false);
 	const messagesRef = useRef<HTMLDivElement>(null);
@@ -150,6 +129,20 @@ export default function App() {
 		setShowHomeEmpty(false);
 	}, []);
 
+	const focusApiKey = useCallback(() => {
+		window.requestAnimationFrame(() => {
+			const input = document.querySelector<HTMLInputElement>(
+				".openrouter-key-input",
+			);
+			if (input) {
+				input.focus();
+				input.scrollIntoView({ block: "center", behavior: "smooth" });
+				return;
+			}
+			setSettingsOpen(true);
+		});
+	}, []);
+
 	useEffect(() => {
 		void (async () => {
 			const valid = await validateStoredKey();
@@ -184,12 +177,13 @@ export default function App() {
 		onApiKeyChange(false);
 	}, [onApiKeyChange]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: re-scroll as zoom crumbs stream in
 	useEffect(() => {
 		if (messages.length === 0 && !busy) return;
 		const el = messagesRef.current;
 		if (!el) return;
 		el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-	}, [messages.length, busy]);
+	}, [messages.length, busy, trailHtml]);
 
 	useEffect(() => {
 		if (!image) {
@@ -216,16 +210,6 @@ export default function App() {
 		},
 		[dismissHomeEmpty],
 	);
-
-	const selectSampleImage = useCallback(async () => {
-		if (busy) return;
-		try {
-			setImage(await fetchSampleImageFile());
-			dismissHomeEmpty();
-		} catch {
-			// Sample is optional if the static asset is unavailable.
-		}
-	}, [busy, dismissHomeEmpty]);
 
 	const onQueryChange = (value: string) => {
 		if (showHomeEmpty && value.trim().length > 0) {
@@ -306,112 +290,161 @@ export default function App() {
 		queryAbortRef.current?.abort();
 	};
 
+	const runQuery = useCallback(
+		async (opts?: { image?: File | null; text?: string }) => {
+			if (busy) return;
+			const text = (opts?.text ?? query).trim();
+			const imageToSend = opts?.image !== undefined ? opts.image : image;
+			if (!text && !imageToSend) return;
+
+			setQuery("");
+
+			queryAbortRef.current?.abort();
+			const abortController = new AbortController();
+			queryAbortRef.current = abortController;
+
+			setBusy(true);
+			setSchemaInfo("");
+			dismissHomeEmpty();
+
+			try {
+				for await (const event of streamQuery({
+					query: text || DEFAULT_PROMPT,
+					image: imageToSend,
+					model,
+					sessionId,
+					signal: abortController.signal,
+				})) {
+					if (event.type === "session") {
+						setSessionId(event.session_id);
+					} else if (event.type === "user") {
+						setMessages((prev) => [
+							...prev,
+							{ id: nextMessageId(), role: "user", content: event.content },
+						]);
+					} else if (event.type === "trail") {
+						setTrailHtml(event.html);
+					} else if (event.type === "schema") {
+						if (event.structured && event.schema_id) {
+							setSchemaInfo(
+								`Structured · ${event.schema_id} (${event.source})`,
+							);
+						} else {
+							setSchemaInfo("Free-text response");
+						}
+					} else if (event.type === "assistant") {
+						setMessages((prev) => [
+							...prev,
+							{
+								id: nextMessageId(),
+								role: "assistant",
+								content: event.content,
+							},
+						]);
+					} else if (event.type === "error") {
+						setMessages((prev) => [
+							...prev,
+							{
+								id: nextMessageId(),
+								role: "assistant",
+								content: event.message,
+							},
+						]);
+						break;
+					} else if (event.type === "cancelled") {
+						break;
+					} else if (event.type === "done") {
+						clearAttachedImage();
+					}
+				}
+			} catch (err) {
+				if (err instanceof DOMException && err.name === "AbortError") {
+					return;
+				}
+				setMessages((prev) => [
+					...prev,
+					{
+						id: nextMessageId(),
+						role: "assistant",
+						content: err instanceof Error ? err.message : String(err),
+					},
+				]);
+			} finally {
+				if (queryAbortRef.current === abortController) {
+					queryAbortRef.current = null;
+				}
+				setBusy(false);
+			}
+		},
+		[
+			busy,
+			query,
+			image,
+			model,
+			sessionId,
+			clearAttachedImage,
+			dismissHomeEmpty,
+		],
+	);
+
 	const onSubmit = async (e: FormEvent) => {
 		e.preventDefault();
+		await runQuery();
+	};
+
+	const selectSampleImage = useCallback(async () => {
 		if (busy) return;
-		const text = query.trim();
-		if (!text && !image) return;
-
-		queryAbortRef.current?.abort();
-		const abortController = new AbortController();
-		queryAbortRef.current = abortController;
-
-		setBusy(true);
-		setSchemaInfo("");
-
 		try {
-			for await (const event of streamQuery({
-				query: text || DEFAULT_PROMPT,
-				image,
-				model,
-				sessionId,
-				signal: abortController.signal,
-			})) {
-				if (event.type === "session") {
-					setSessionId(event.session_id);
-				} else if (event.type === "user") {
-					setMessages((prev) => [
-						...prev,
-						{ id: nextMessageId(), role: "user", content: event.content },
-					]);
-				} else if (event.type === "trail") {
-					setTrailHtml(event.html);
-				} else if (event.type === "schema") {
-					if (event.structured && event.schema_id) {
-						setSchemaInfo(`Structured · ${event.schema_id} (${event.source})`);
-					} else {
-						setSchemaInfo("Free-text response");
-					}
-				} else if (event.type === "assistant") {
-					setMessages((prev) => [
-						...prev,
-						{ id: nextMessageId(), role: "assistant", content: event.content },
-					]);
-				} else if (event.type === "error") {
-					setMessages((prev) => [
-						...prev,
-						{ id: nextMessageId(), role: "assistant", content: event.message },
-					]);
-					break;
-				} else if (event.type === "cancelled") {
-					break;
-				} else if (event.type === "done") {
-					setQuery("");
-					clearAttachedImage();
-				}
-			}
-		} catch (err) {
-			if (err instanceof DOMException && err.name === "AbortError") {
+			const file = await fetchSampleImageFile();
+			dismissHomeEmpty();
+			setImage(file);
+			if (hasKey) {
+				await runQuery({ image: file });
 				return;
 			}
-			setMessages((prev) => [
-				...prev,
-				{
-					id: nextMessageId(),
-					role: "assistant",
-					content: err instanceof Error ? err.message : String(err),
-				},
-			]);
-		} finally {
-			if (queryAbortRef.current === abortController) {
-				queryAbortRef.current = null;
-			}
-			setBusy(false);
+			focusApiKey();
+		} catch {
+			// Sample is optional if the static asset is unavailable.
 		}
-	};
+	}, [busy, dismissHomeEmpty, focusApiKey, hasKey, runQuery]);
 
 	return (
 		<div className="app">
 			<div className="bg-glow bg-glow-a" aria-hidden />
 			<div className="bg-glow bg-glow-b" aria-hidden />
 
-			<header className="header header-compact">
-				<div className="header-bar">
-					<div className="brand-compact">
-						<ZoomifyLogo size={36} className="logo-mark" />
-						<h1 className="brand-name">Zoomify</h1>
+			<header className="header product-topbar">
+				<div className="product-topbar-inner">
+					<div className="product-brand">
+						<ZoomifyLogo size={32} className="logo-mark" />
+						<span className="brand-name">Zoomify</span>
 						{busy && <span className="live-badge">Working</span>}
 					</div>
-					<div className="header-bar-actions">
-						<StatusIndicator hasKey={hasKey} />
-						<ProductSignOut />
+
+					<nav className="product-nav" aria-label="Workspace views">
 						<button
 							type="button"
-							className="product-menu-btn"
-							aria-label="Open settings"
+							className="product-nav-item active"
+							aria-current="page"
+						>
+							<MessageCircle size={16} aria-hidden="true" />
+							<span>Chat</span>
+						</button>
+						<button
+							type="button"
+							className="product-nav-item"
+							aria-haspopup="dialog"
 							aria-expanded={settingsOpen}
 							onClick={() => setSettingsOpen(true)}
 						>
-							<svg viewBox="0 0 24 24" aria-hidden="true">
-								<path
-									d="M4 7h16M4 12h16M4 17h16"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="1.75"
-									strokeLinecap="round"
-								/>
-							</svg>
+							<Settings size={16} aria-hidden="true" />
+							<span>Settings</span>
 						</button>
+					</nav>
+
+					<div className="product-topbar-actions">
+						<StatusIndicator hasKey={hasKey} />
+						<ProductSignOut />
 					</div>
 				</div>
 			</header>
@@ -419,20 +452,26 @@ export default function App() {
 			<ProductSettingsDrawer
 				open={settingsOpen}
 				onClose={() => setSettingsOpen(false)}
-				busy={busy}
-				onSelectSampleImage={selectSampleImage}
 				schemaCtaVisible={schemaCtaVisible}
 				schemaCtaLeaving={schemaCtaLeaving}
 				onDismissSchemaCta={dismissSchemaCta}
 			/>
 
 			<main className="layout">
-				<section
-					className={`panel card chat-panel${mobileView === "tree" ? " mobile-hidden" : ""}`}
-				>
+				<section className="panel card chat-panel">
 					<div className="panel-head">
 						<div className="panel-head-title">
+							<MessagesSquare
+								size={20}
+								className="panel-head-lucide"
+								aria-hidden="true"
+							/>
 							<h2>Conversation</h2>
+						</div>
+						<div className="panel-head-meta">
+							{schemaInfo && (
+								<span className="schema-info-inline">{schemaInfo}</span>
+							)}
 							<button
 								type="button"
 								className="panel-icon-btn"
@@ -441,44 +480,58 @@ export default function App() {
 								title="Reset conversation"
 								aria-label="Reset conversation"
 							>
-								<svg viewBox="0 0 24 24" aria-hidden="true">
-									<path
-										d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0 0 14-2M19 5a9 9 0 0 0-14 2"
-										fill="none"
-										stroke="currentColor"
-										strokeWidth="1.75"
-										strokeLinecap="round"
-										strokeLinejoin="round"
-									/>
-								</svg>
+								<RefreshCw size={16} aria-hidden="true" />
 							</button>
-						</div>
-						<div className="panel-head-meta">
-							{schemaInfo && (
-								<span className="schema-info-inline">{schemaInfo}</span>
-							)}
-							{busy && <span className="live-badge">Agent working</span>}
-							<PanelViewToggle
-								mobileView={mobileView}
-								onChange={setMobileView}
-							/>
 						</div>
 					</div>
 
 					<div className="messages" ref={messagesRef}>
-						{messages.length === 0 && showHomeEmpty && (
+						{messages.length === 0 && showHomeEmpty && !busy && (
 							<div className="empty-state">
 								<div className="empty-brand">
-									<ZoomifyLogo size={72} className="empty-logo" decorative />
-									<p className="empty-brand-name">Zoomify</p>
+									<span className="empty-icon-box">
+										<ZoomifyLogo size={44} className="empty-logo" decorative />
+									</span>
+									<p className="empty-brand-name">ZOOMIFY</p>
 								</div>
 								<p className="empty-title">Start extracting</p>
 								<p className="hint">
-									Open the menu to try a sample image, add your OpenRouter key,
-									then ask a question. Or attach with the paperclip / paste with{" "}
-									<kbd className="kbd-hint">⌘V</kbd> /{" "}
-									<kbd className="kbd-hint">Ctrl+V</kbd>.
+									Try a sample image, add your OpenRouter key, then ask a
+									question.
+									<span className="empty-hint-desktop">
+										{" "}
+										Or attach with the paperclip / paste with{" "}
+										<kbd className="kbd-hint">⌘V</kbd> /{" "}
+										<kbd className="kbd-hint">Ctrl+V</kbd>.
+									</span>
 								</p>
+								<div className="empty-actions">
+									<button
+										type="button"
+										className="empty-action-btn"
+										onClick={() => void selectSampleImage()}
+										disabled={busy}
+									>
+										<Image
+											size={16}
+											className="empty-action-icon"
+											aria-hidden="true"
+										/>
+										Try sample
+									</button>
+									<button
+										type="button"
+										className="empty-action-btn"
+										onClick={focusApiKey}
+									>
+										<KeyRound
+											size={16}
+											className="empty-action-icon"
+											aria-hidden="true"
+										/>
+										Get key
+									</button>
+								</div>
 							</div>
 						)}
 						{messages.map((m) => (
@@ -498,6 +551,21 @@ export default function App() {
 								</div>
 							</div>
 						))}
+						{busy && (
+							<div
+								className="msg msg-assistant msg-loading"
+								aria-live="polite"
+								aria-busy="true"
+							>
+								<div className="msg-head">
+									<ZoomifyLogo size={22} decorative />
+									<strong>Zoomify</strong>
+								</div>
+								<div className="msg-body">
+									<TrailHost html={trailHtml} variant="inline" />
+								</div>
+							</div>
+						)}
 					</div>
 
 					<div className="composer">
@@ -563,15 +631,7 @@ export default function App() {
 												title="Attach image"
 												aria-label="Attach image"
 											>
-												<svg viewBox="0 0 24 24" aria-hidden="true">
-													<path
-														d="M16.5 6.5v8.25a4.5 4.5 0 1 1-9 0V7.5a3 3 0 1 1 6 0v7.5a1.5 1.5 0 1 1-3 0V7.5"
-														fill="none"
-														stroke="currentColor"
-														strokeWidth="1.75"
-														strokeLinecap="round"
-													/>
-												</svg>
+												<Paperclip size={16} aria-hidden="true" />
 												<input
 													ref={fileInputRef}
 													type="file"
@@ -588,16 +648,11 @@ export default function App() {
 													aria-label="Stop extraction"
 													onClick={onStop}
 												>
-													<svg viewBox="0 0 24 24" aria-hidden="true">
-														<rect
-															x="7"
-															y="7"
-															width="10"
-															height="10"
-															rx="1.5"
-															fill="currentColor"
-														/>
-													</svg>
+													<Square
+														size={14}
+														fill="currentColor"
+														aria-hidden="true"
+													/>
 												</button>
 											) : (
 												<button
@@ -607,16 +662,7 @@ export default function App() {
 													aria-label="Send"
 													disabled={!query.trim() && !image}
 												>
-													<svg viewBox="0 0 24 24" aria-hidden="true">
-														<path
-															d="M5 12h12M13 7l5 5-5 5"
-															fill="none"
-															stroke="currentColor"
-															strokeWidth="1.75"
-															strokeLinecap="round"
-															strokeLinejoin="round"
-														/>
-													</svg>
+													<ArrowRight size={16} aria-hidden="true" />
 												</button>
 											)}
 										</div>
@@ -625,16 +671,6 @@ export default function App() {
 							</form>
 						)}
 					</div>
-				</section>
-
-				<section
-					className={`panel card tree-panel${mobileView === "chat" ? " mobile-hidden" : ""}`}
-				>
-					<div className="panel-head">
-						<h2>Zoom tree</h2>
-						<PanelViewToggle mobileView={mobileView} onChange={setMobileView} />
-					</div>
-					<TrailHost html={trailHtml} />
 				</section>
 			</main>
 			{imagePreviewOpen &&

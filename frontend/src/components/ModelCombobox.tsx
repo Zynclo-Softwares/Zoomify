@@ -1,3 +1,4 @@
+import { Check, ChevronDown, Sparkles } from "lucide-react";
 import {
 	type KeyboardEvent,
 	useEffect,
@@ -104,21 +105,13 @@ export default function ModelCombobox({
 				aria-haspopup="listbox"
 				aria-expanded={open}
 			>
+				<Sparkles size={16} className="model-picker-spark" aria-hidden="true" />
 				<span className="model-picker-trigger-label">{triggerLabel}</span>
-				<svg
+				<ChevronDown
+					size={16}
 					className={`model-picker-chevron${open ? " open" : ""}`}
-					viewBox="0 0 24 24"
 					aria-hidden="true"
-				>
-					<path
-						d="M6 9l6 6 6-6"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="1.75"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					/>
-				</svg>
+				/>
 			</button>
 
 			{open && (
@@ -161,20 +154,11 @@ export default function ModelCombobox({
 											{formatModelLabel(m)}
 										</span>
 										{m === value && (
-											<svg
+											<Check
+												size={16}
 												className="model-picker-check"
-												viewBox="0 0 24 24"
 												aria-hidden="true"
-											>
-												<path
-													d="M5 12l5 5L20 7"
-													fill="none"
-													stroke="currentColor"
-													strokeWidth="2"
-													strokeLinecap="round"
-													strokeLinejoin="round"
-												/>
-											</svg>
+											/>
 										)}
 									</button>
 								</li>
