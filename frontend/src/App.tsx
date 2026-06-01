@@ -355,8 +355,6 @@ export default function App() {
 						break;
 					} else if (event.type === "cancelled") {
 						break;
-					} else if (event.type === "done") {
-						clearAttachedImage();
 					}
 				}
 			} catch (err) {
@@ -378,15 +376,7 @@ export default function App() {
 				setBusy(false);
 			}
 		},
-		[
-			busy,
-			query,
-			image,
-			model,
-			sessionId,
-			clearAttachedImage,
-			dismissHomeEmpty,
-		],
+		[busy, query, image, model, sessionId, dismissHomeEmpty],
 	);
 
 	const onSubmit = async (e: FormEvent) => {
