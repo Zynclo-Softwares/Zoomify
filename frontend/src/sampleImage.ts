@@ -4,7 +4,7 @@ const SAMPLE_IMAGES: Record<SampleImageId, { url: string; filename: string }> =
 	{
 		"fuzzy-text": { url: "/tiny.png", filename: "tiny.png" },
 		blueprint: { url: "/blueprint.png", filename: "blueprint.png" },
-		handwriting: { url: "/handwriting.png", filename: "handwriting.png" },
+		handwriting: { url: "/handwriting.jpeg", filename: "handwriting.jpeg" },
 	};
 
 export async function fetchSampleImageFile(id: SampleImageId): Promise<File> {
