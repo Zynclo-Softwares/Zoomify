@@ -4,6 +4,7 @@ import {
 	MessageCircle,
 	MessagesSquare,
 	Paperclip,
+	PenLine,
 	RefreshCw,
 	ScanText,
 	Settings,
@@ -500,8 +501,8 @@ export default function App() {
 								</div>
 								<p className="empty-title">Start extracting</p>
 								<p className="hint">
-									Attach a fuzzy-text or blueprint sample, add your OpenRouter
-									key, then ask what to extract.
+									Attach a fuzzy-text, blueprint, or handwriting sample, add
+									your OpenRouter key, then ask what to extract.
 									<span className="empty-hint-desktop">
 										{" "}
 										Or attach with the paperclip / paste with{" "}
@@ -535,6 +536,19 @@ export default function App() {
 											aria-hidden="true"
 										/>
 										Blueprint
+									</button>
+									<button
+										type="button"
+										className="empty-action-btn"
+										onClick={() => void attachSampleImage("handwriting")}
+										disabled={busy}
+									>
+										<PenLine
+											size={16}
+											className="empty-action-icon"
+											aria-hidden="true"
+										/>
+										Handwriting
 									</button>
 								</div>
 							</div>
