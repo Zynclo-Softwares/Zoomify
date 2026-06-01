@@ -1,11 +1,12 @@
 import {
 	ArrowRight,
-	Image,
-	KeyRound,
+	DraftingCompass,
 	MessageCircle,
 	MessagesSquare,
 	Paperclip,
+	PenLine,
 	RefreshCw,
+	ScanText,
 	Settings,
 	Square,
 } from "lucide-react";
@@ -49,7 +50,7 @@ import {
 	resolveModelPreference,
 	setStoredModel,
 } from "./modelPreference";
-import { fetchSampleImageFile } from "./sampleImage";
+import { fetchSampleImageFile, type SampleImageId } from "./sampleImage";
 
 const DEFAULT_PROMPT =
 	"Extract the key information from this image; zoom in to read any small text.";
@@ -83,6 +84,7 @@ export default function App() {
 	const [showHomeEmpty, setShowHomeEmpty] = useState(true);
 	const schemaCtaDismissedRef = useRef(false);
 	const messagesRef = useRef<HTMLDivElement>(null);
+	const composerRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const queryAbortRef = useRef<AbortController | null>(null);
 
@@ -353,8 +355,6 @@ export default function App() {
 						break;
 					} else if (event.type === "cancelled") {
 						break;
-					} else if (event.type === "done") {
-						clearAttachedImage();
 					}
 				}
 			} catch (err) {
@@ -376,15 +376,7 @@ export default function App() {
 				setBusy(false);
 			}
 		},
-		[
-			busy,
-			query,
-			image,
-			model,
-			sessionId,
-			clearAttachedImage,
-			dismissHomeEmpty,
-		],
+		[busy, query, image, model, sessionId, dismissHomeEmpty],
 	);
 
 	const onSubmit = async (e: FormEvent) => {
@@ -392,21 +384,24 @@ export default function App() {
 		await runQuery();
 	};
 
-	const selectSampleImage = useCallback(async () => {
-		if (busy) return;
-		try {
-			const file = await fetchSampleImageFile();
-			dismissHomeEmpty();
-			setImage(file);
-			if (hasKey) {
-				await runQuery({ image: file });
-				return;
+	const attachSampleImage = useCallback(
+		async (sampleId: SampleImageId) => {
+			if (busy) return;
+			try {
+				const file = await fetchSampleImageFile(sampleId);
+				dismissHomeEmpty();
+				setImage(file);
+				if (hasKey) {
+					composerRef.current?.focus();
+					return;
+				}
+				focusApiKey();
+			} catch {
+				// Sample is optional if the static asset is unavailable.
 			}
-			focusApiKey();
-		} catch {
-			// Sample is optional if the static asset is unavailable.
-		}
-	}, [busy, dismissHomeEmpty, focusApiKey, hasKey, runQuery]);
+		},
+		[busy, dismissHomeEmpty, focusApiKey, hasKey],
+	);
 
 	return (
 		<div className="app">
@@ -496,8 +491,8 @@ export default function App() {
 								</div>
 								<p className="empty-title">Start extracting</p>
 								<p className="hint">
-									Try a sample image, add your OpenRouter key, then ask a
-									question.
+									Attach a fuzzy-text, blueprint, or handwriting sample, add
+									your OpenRouter key, then ask what to extract.
 									<span className="empty-hint-desktop">
 										{" "}
 										Or attach with the paperclip / paste with{" "}
@@ -509,27 +504,41 @@ export default function App() {
 									<button
 										type="button"
 										className="empty-action-btn"
-										onClick={() => void selectSampleImage()}
+										onClick={() => void attachSampleImage("fuzzy-text")}
 										disabled={busy}
 									>
-										<Image
+										<ScanText
 											size={16}
 											className="empty-action-icon"
 											aria-hidden="true"
 										/>
-										Try sample
+										Fuzzy text
 									</button>
 									<button
 										type="button"
 										className="empty-action-btn"
-										onClick={focusApiKey}
+										onClick={() => void attachSampleImage("blueprint")}
+										disabled={busy}
 									>
-										<KeyRound
+										<DraftingCompass
 											size={16}
 											className="empty-action-icon"
 											aria-hidden="true"
 										/>
-										Get key
+										Blueprint
+									</button>
+									<button
+										type="button"
+										className="empty-action-btn"
+										onClick={() => void attachSampleImage("handwriting")}
+										disabled={busy}
+									>
+										<PenLine
+											size={16}
+											className="empty-action-icon"
+											aria-hidden="true"
+										/>
+										Handwriting
 									</button>
 								</div>
 							</div>
@@ -602,6 +611,7 @@ export default function App() {
 								)}
 								<div className="composer-box">
 									<textarea
+										ref={composerRef}
 										value={query}
 										onChange={(e) => onQueryChange(e.target.value)}
 										onPaste={onComposerPaste}
