@@ -875,6 +875,19 @@
 		flex-shrink: 0;
 		margin-bottom: 0.5rem;
 	}
+
+	.msg-assistant {
+		margin-right: 0;
+		margin-left: 0;
+		width: 100%;
+		max-width: 100%;
+		box-sizing: border-box;
+	}
+
+	.msg-loading .msg-body {
+		min-width: 0;
+		max-width: 100%;
+	}
 }
 
 .panel-head {
@@ -1072,10 +1085,6 @@
 	.empty-action-btn:last-child {
 		grid-column: 1 / -1;
 		justify-self: center;
-	}
-
-	.msg-assistant {
-		margin-right: 0;
 	}
 }
 
