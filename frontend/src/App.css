@@ -59,40 +59,6 @@
 	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.header-compact {
-	padding: 0.85rem 1.25rem 0;
-	flex-shrink: 0;
-}
-
-.header-bar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 1rem;
-	padding-bottom: 0.85rem;
-}
-
-.brand-compact {
-	display: flex;
-	align-items: center;
-	gap: 0.65rem;
-	min-width: 0;
-}
-
-.brand-compact .brand-name {
-	margin: 0;
-	font-size: 1.15rem;
-	font-weight: 700;
-	letter-spacing: -0.02em;
-}
-
-.header-bar-actions {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	flex-shrink: 0;
-}
-
 .status-dot {
 	width: 0.55rem;
 	height: 0.55rem;
@@ -180,36 +146,6 @@
 	background: rgba(255, 255, 255, 0.04);
 	border-color: rgba(255, 255, 255, 0.16);
 	color: #ffffff;
-}
-
-.panel-view-toggle {
-	display: none;
-	align-items: center;
-	padding: 0.2rem;
-	border: 1px solid rgba(148, 163, 184, 0.2);
-	border-radius: 999px;
-	background: rgba(30, 41, 59, 0.55);
-	flex-shrink: 0;
-}
-
-.panel-view-toggle button {
-	padding: 0.3rem 0.65rem;
-	border: none;
-	border-radius: 999px;
-	background: transparent;
-	color: var(--muted);
-	font: inherit;
-	font-size: 0.72rem;
-	font-weight: 600;
-	cursor: pointer;
-	transition:
-		background 0.15s,
-		color 0.15s;
-}
-
-.panel-view-toggle button.active {
-	background: rgba(0, 85, 255, 0.22);
-	color: var(--text);
 }
 
 .settings-drawer-root {
@@ -781,13 +717,6 @@
 	align-items: stretch;
 }
 
-@media (max-width: 640px) {
-	.header-bar-actions {
-		flex-wrap: wrap;
-		justify-content: flex-end;
-	}
-}
-
 .panel {
 	display: flex;
 	flex-direction: column;
@@ -797,16 +726,11 @@
 	overflow: hidden;
 }
 
-.chat-panel,
-.tree-panel {
+.chat-panel {
 	min-height: 0;
 }
 
 @media (min-width: 901px) {
-	.tree-panel {
-		max-width: none;
-	}
-
 	.layout {
 		padding: 1rem 2rem 1.25rem;
 	}
@@ -872,23 +796,6 @@
 }
 
 @media (max-width: 900px) {
-	.header-compact {
-		padding: 0.45rem 0.65rem 0;
-		flex-shrink: 0;
-	}
-
-	.header-bar {
-		padding-bottom: 0.45rem;
-	}
-
-	.header-bar-actions {
-		align-self: center;
-	}
-
-	.panel-view-toggle {
-		display: inline-flex;
-	}
-
 	.layout {
 		flex: 1;
 		display: flex;
@@ -909,12 +816,7 @@
 		min-height: 0;
 	}
 
-	.panel.mobile-hidden {
-		display: none;
-	}
-
-	.chat-panel,
-	.tree-panel {
+	.chat-panel {
 		min-height: 0;
 		border-radius: var(--radius) var(--radius) calc(var(--radius) + 6px)
 			calc(var(--radius) + 6px);
