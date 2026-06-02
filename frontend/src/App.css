@@ -818,6 +818,8 @@
 
 	.chat-panel {
 		min-height: 0;
+		min-width: 0;
+		overflow-x: hidden;
 		border-radius: var(--radius) var(--radius) calc(var(--radius) + 6px)
 			calc(var(--radius) + 6px);
 		padding-bottom: 0.5rem;
@@ -825,6 +827,70 @@
 
 	.chat-panel.panel {
 		padding: 0.65rem 0.75rem 0.5rem;
+	}
+
+	.panel-head {
+		flex-shrink: 0;
+		margin-bottom: 0.5rem;
+		min-width: 0;
+		gap: 0.35rem;
+	}
+
+	.panel-head-title {
+		min-width: 0;
+	}
+
+	.panel-head-meta {
+		min-width: 0;
+		flex-shrink: 1;
+	}
+
+	.schema-info-inline {
+		max-width: min(10rem, 32vw);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.messages {
+		overflow-x: hidden;
+		padding-right: 0;
+	}
+
+	.msg {
+		min-width: 0;
+		max-width: 100%;
+		box-sizing: border-box;
+	}
+
+	.msg-user {
+		margin-left: 0;
+		width: 100%;
+		max-width: 100%;
+	}
+
+	.msg-body {
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	.msg-body .markdown-body {
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	.trail-host--inline {
+		overflow-x: hidden;
+		max-width: 100%;
+	}
+
+	.trail-host--inline .trail-host-inner {
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	.composer-box {
+		overflow-x: hidden;
 	}
 
 	.composer {
@@ -836,22 +902,12 @@
 		padding-bottom: 0.25rem;
 	}
 
-	.panel-head {
-		flex-shrink: 0;
-		margin-bottom: 0.5rem;
-	}
-
 	.msg-assistant {
 		margin-right: 0;
 		margin-left: 0;
 		width: 100%;
 		max-width: 100%;
 		box-sizing: border-box;
-	}
-
-	.msg-loading .msg-body {
-		min-width: 0;
-		max-width: 100%;
 	}
 }
 
@@ -1094,7 +1150,8 @@
 }
 
 .msg-loading .msg-body {
-	min-width: min(100%, 28rem);
+	min-width: 0;
+	max-width: 100%;
 }
 
 .trail-host--inline {
