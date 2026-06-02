@@ -1005,6 +1005,10 @@
 	.empty-hint-desktop {
 		display: none;
 	}
+
+	.msg-assistant {
+		margin-right: 0;
+	}
 }
 
 .kbd-hint {

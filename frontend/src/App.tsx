@@ -197,26 +197,19 @@ export default function App() {
 		return () => URL.revokeObjectURL(url);
 	}, [image]);
 
-	const onImageChange = useCallback(
-		(file: File | undefined) => {
-			if (!file) {
-				setImage(null);
-				return;
-			}
-			if (!file.type.startsWith("image/")) {
-				alert("Only image files are accepted.");
-				return;
-			}
-			setImage(file);
-			dismissHomeEmpty();
-		},
-		[dismissHomeEmpty],
-	);
+	const onImageChange = useCallback((file: File | undefined) => {
+		if (!file) {
+			setImage(null);
+			return;
+		}
+		if (!file.type.startsWith("image/")) {
+			alert("Only image files are accepted.");
+			return;
+		}
+		setImage(file);
+	}, []);
 
 	const onQueryChange = (value: string) => {
-		if (showHomeEmpty && value.trim().length > 0) {
-			dismissHomeEmpty();
-		}
 		setQuery(value);
 	};
 
@@ -389,7 +382,6 @@ export default function App() {
 			if (busy) return;
 			try {
 				const file = await fetchSampleImageFile(sampleId);
-				dismissHomeEmpty();
 				setImage(file);
 				if (hasKey) {
 					composerRef.current?.focus();
@@ -400,7 +392,7 @@ export default function App() {
 				// Sample is optional if the static asset is unavailable.
 			}
 		},
-		[busy, dismissHomeEmpty, focusApiKey, hasKey],
+		[busy, focusApiKey, hasKey],
 	);
 
 	return (
