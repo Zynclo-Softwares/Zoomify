@@ -806,6 +806,69 @@
 	.tree-panel {
 		max-width: none;
 	}
+
+	.layout {
+		padding: 1rem 2rem 1.25rem;
+	}
+
+	.chat-panel.panel {
+		padding: 1.25rem 2rem 1.15rem;
+	}
+
+	.panel-head {
+		max-width: 56rem;
+		margin-inline: auto;
+		width: 100%;
+	}
+
+	.messages {
+		gap: 1rem;
+		max-width: 56rem;
+		margin-inline: auto;
+		width: 100%;
+	}
+
+	.msg-assistant {
+		margin-right: 3rem;
+	}
+
+	.msg-user {
+		margin-left: 3rem;
+	}
+
+	.composer {
+		max-width: 56rem;
+		margin-inline: auto;
+		width: 100%;
+	}
+}
+
+@media (min-width: 1280px) {
+	.layout {
+		padding: 1.25rem 3.5rem 1.5rem;
+	}
+
+	.chat-panel.panel {
+		padding: 1.5rem 3rem 1.25rem;
+	}
+
+	.messages {
+		max-width: 52rem;
+		gap: 1.15rem;
+	}
+
+	.panel-head,
+	.composer {
+		max-width: 52rem;
+	}
+
+	.msg-assistant {
+		margin-right: clamp(4rem, 12vw, 9rem);
+	}
+
+	.msg-user {
+		margin-left: clamp(4rem, 12vw, 9rem);
+	}
 }
 
 @media (max-width: 900px) {
