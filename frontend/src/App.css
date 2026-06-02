@@ -858,6 +858,10 @@
 		padding-bottom: 0.5rem;
 	}
 
+	.chat-panel.panel {
+		padding: 0.65rem 0.75rem 0.5rem;
+	}
+
 	.composer {
 		flex-shrink: 0;
 		padding-top: 0.65rem;
@@ -1004,6 +1008,67 @@
 @media (max-width: 640px) {
 	.empty-hint-desktop {
 		display: none;
+	}
+
+	.messages {
+		margin-bottom: 0.5rem;
+	}
+
+	.panel-head {
+		margin-bottom: 0.35rem;
+	}
+
+	.composer {
+		padding-top: 0.5rem;
+	}
+
+	.empty-state {
+		padding: 0.35rem 0.75rem 0.5rem;
+		margin: 0;
+		justify-content: flex-start;
+	}
+
+	.empty-brand {
+		gap: 0.35rem;
+		margin-bottom: 0.45rem;
+	}
+
+	.empty-icon-box {
+		width: 3.75rem;
+		height: 3.75rem;
+		border-radius: 18px;
+	}
+
+	.empty-title {
+		font-size: 1.1rem;
+		margin-bottom: 0.3rem;
+	}
+
+	.hint {
+		font-size: 0.78rem;
+		line-height: 1.4;
+	}
+
+	.empty-actions {
+		margin-top: 0.55rem;
+		gap: 0.4rem;
+		flex-wrap: nowrap;
+		width: 100%;
+		max-width: 100%;
+	}
+
+	.empty-action-btn {
+		flex: 1 1 0;
+		min-width: 0;
+		justify-content: center;
+		padding: 0.38rem 0.35rem;
+		font-size: 0.75rem;
+		gap: 0.3rem;
+	}
+
+	.empty-action-icon {
+		width: 14px;
+		height: 14px;
 	}
 
 	.msg-assistant {
