@@ -961,6 +961,10 @@
 	padding-right: 0.25rem;
 }
 
+.messages:has(.empty-state) {
+	justify-content: center;
+}
+
 .empty-state {
 	display: flex;
 	flex-direction: column;
@@ -1023,9 +1027,9 @@
 	}
 
 	.empty-state {
-		padding: 0.35rem 0.75rem 0.5rem;
-		margin: 0;
-		justify-content: flex-start;
+		padding: 0.5rem 0.75rem;
+		margin: auto;
+		justify-content: center;
 	}
 
 	.empty-brand {
