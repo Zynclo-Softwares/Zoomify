@@ -23,15 +23,6 @@ function validationDetail(detail: unknown): string | null {
 
 export function friendlyApiMessage(status: number, detail?: unknown): string {
 	if (typeof detail === "string" && detail.trim()) {
-		if (status === 429 && detail.toLowerCase().includes("daily limit")) {
-			return `${detail} Visit Pricing to upgrade your plan.`;
-		}
-		if (status === 429 && detail.toLowerCase().includes("rate limit")) {
-			return `${detail} Please wait a moment and try again.`;
-		}
-		if (status === 400 && detail.toLowerCase().includes("encrypted")) {
-			return "Your OpenRouter key could not be read. Please enter it again.";
-		}
 		return detail;
 	}
 

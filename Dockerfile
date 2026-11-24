@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---------------------------------------------------------------------------
-# Zoomify — production image (FastAPI + built React SPA)
+# Zoomify — production image (remote MCP server + account API + built React SPA)
 #
 # Multi-stage build:
 #   1. frontend-builder — bun install + vite build → frontend/dist
@@ -22,7 +22,9 @@
 # Deploy contract (CMD):
 #   1. python -m zoomify.migrations — apply Mongo indexes when MONGODB_URI
 #      is set (idempotent; fails the container if indexes cannot be created).
-#   2. uvicorn server:app — API + static UI on $PORT (Railway/Fly inject PORT).
+#   2. uvicorn server:app — MCP endpoint (/mcp), API, and static UI on $PORT
+#      (Railway/Fly inject PORT). Zoom sessions and uploads live in process
+#      memory, so run a single instance (or add sticky routing) per deployment.
 # ---------------------------------------------------------------------------
 
 ARG PYTHON_VERSION=3.12
@@ -104,4 +106,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request,os; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\",\"8000\")}/api/health', timeout=4)" \
         || exit 1
 
-CMD ["sh", "-c", "python -m zoomify.migrations && exec uvicorn server:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "python -m zoomify.migrations && exec uvicorn server:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips=*"]

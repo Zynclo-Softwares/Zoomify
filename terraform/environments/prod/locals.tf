@@ -20,7 +20,6 @@ locals {
     "AUTO_CREATE_INDEXES_ON_BOOT",
     "CLERK_JWKS_URL",
     "MONGODB_DATABASE",
-    "OPENROUTER_BASE_URL",
     "RATE_LIMIT_FREE_PER_MINUTE",
     "RATE_LIMIT_STARTER_PER_MINUTE",
     "RATE_LIMIT_PRO_PER_MINUTE",
@@ -34,7 +33,6 @@ locals {
 
   # Secret backend keys — keep in sync with root .env.example.
   backend_secret_env_names = [
-    "BYOK_PRIVATE_KEY",
     "GITHUB_TOKEN",
     "MONGODB_URI",
     "STRIPE_SECRET_KEY",
@@ -42,7 +40,6 @@ locals {
 
   backend_config_env_defaults = {
     AUTO_CREATE_INDEXES_ON_BOOT = "false"
-    OPENROUTER_BASE_URL         = "https://openrouter.ai/api/v1"
   }
 
   railway_env_vars = merge(

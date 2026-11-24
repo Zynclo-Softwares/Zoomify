@@ -31,8 +31,8 @@ route53_zone_name = "zynclo.com"
 railway_env_vars = {
   CLERK_JWKS_URL                = "https://clerk.zoomify.zynclo.com/.well-known/jwks.json"
   MONGODB_DATABASE              = "Zoomify-Prod"
-  RATE_LIMIT_FREE_PER_MINUTE    = "10"
-  RATE_LIMIT_STARTER_PER_MINUTE = "30"
-  RATE_LIMIT_PRO_PER_MINUTE     = "60"
-  # OPENROUTER_BASE_URL defaults to https://openrouter.ai/api/v1 when omitted.
+  # Metered MCP requests per minute, per plan (defaults live in src/zoomify/plans.py).
+  RATE_LIMIT_FREE_PER_MINUTE    = "20"
+  RATE_LIMIT_STARTER_PER_MINUTE = "60"
+  RATE_LIMIT_PRO_PER_MINUTE     = "120"
 }

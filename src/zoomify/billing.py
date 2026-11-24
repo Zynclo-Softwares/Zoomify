@@ -6,12 +6,22 @@ import os
 import time
 from collections import defaultdict, deque
 
-from fastapi import HTTPException
+from zoomify.db import increment_monthly_usage, user_billing_status
+from zoomify.plans import PLANS, YEARLY_DISCOUNT_PERCENT, rate_limit_per_minute
 
-from zoomify.db import increment_daily_usage, user_billing_status
-from zoomify.plans import YEARLY_DISCOUNT_PERCENT, PLANS, rate_limit_per_minute
+# Tools that count against the monthly allowance. Everything else is free.
+METERED_TOOLS = ("open_image", "zoom")
 
 _rate_windows: dict[str, deque[float]] = defaultdict(deque)
+
+
+class QuotaExceeded(Exception):
+    """Raised when a metered request is blocked by a plan limit."""
+
+    def __init__(self, message: str, *, kind: str, status: dict | None = None) -> None:
+        super().__init__(message)
+        self.kind = kind  # "rate" | "monthly"
+        self.status = status
 
 
 def _env(name: str) -> str | None:
@@ -34,48 +44,45 @@ def billing_plans_payload() -> dict:
     plans = []
     for p in PLANS.values():
         monthly = p.price_monthly_usd
-        yearly = None
-        if monthly and monthly > 0:
-            yearly = round(monthly * 12 * yearly_factor)
-        entry = {
-            "id": p.id,
-            "name": p.name,
-            "price_monthly_usd": p.price_monthly_usd,
-            "price_yearly_usd": yearly,
-            "yearly_discount_percent": YEARLY_DISCOUNT_PERCENT if monthly else None,
-            "daily_limit": p.daily_limit,
-            "description": p.description,
-            "highlights": list(p.highlights),
-            "unlimited": p.daily_limit is None,
-            "checkout": None,
-        }
-        if p.id == "starter":
-            entry["checkout"] = {
-                "monthly": links["starter_monthly"],
-                "yearly": links["starter_yearly"],
+        yearly = round(monthly * 12 * yearly_factor) if monthly else None
+        checkout = None
+        if p.id != "free":
+            checkout = {
+                "monthly": links[f"{p.id}_monthly"],
+                "yearly": links[f"{p.id}_yearly"],
             }
-        elif p.id == "pro":
-            entry["checkout"] = {
-                "monthly": links["pro_monthly"],
-                "yearly": links["pro_yearly"],
+        plans.append(
+            {
+                "id": p.id,
+                "name": p.name,
+                "price_monthly_usd": monthly,
+                "price_yearly_usd": yearly,
+                "yearly_discount_percent": YEARLY_DISCOUNT_PERCENT if monthly else None,
+                "monthly_limit": p.monthly_limit,
+                "rate_limit_per_minute": rate_limit_per_minute(p.id),
+                "max_image_mb": p.max_image_mb,
+                "max_open_images": p.max_open_images,
+                "description": p.description,
+                "highlights": list(p.highlights),
+                "checkout": checkout,
             }
-        plans.append(entry)
+        )
 
     return {
         "plans": plans,
         "yearly_discount_percent": YEARLY_DISCOUNT_PERCENT,
         "money_back_days": 14,
-        "metered_endpoint": "POST /api/query",
-        "premium_schema": {
-            "name": "Premium schema service",
+        "metered_tools": list(METERED_TOOLS),
+        "custom_skills": {
+            "name": "Custom skills",
             "description": (
-                "Custom extraction schemas tailored to your documents — "
-                "invoices, forms, IDs, and domain-specific layouts."
+                "Domain-specific agent skills tuned to your documents — "
+                "drawing standards, forms, title blocks, and house conventions."
             ),
             "highlights": [
-                "Custom JSON schema design",
-                "Validation + prompt tuning",
-                "Private schema registry per team",
+                "Skills written for your document types",
+                "Extraction checklists and output formats",
+                "Higher limits and private deployments",
                 "Delivered by Zynclo engineers",
             ],
             "contact": "form",
@@ -83,48 +90,48 @@ def billing_plans_payload() -> dict:
     }
 
 
-def _rate_limit_for_plan(plan_id: str) -> int:
-    return rate_limit_per_minute(plan_id)
-
-
 def _check_rate_limit(clerk_user_id: str, plan_id: str) -> None:
-    limit = _rate_limit_for_plan(plan_id)
+    limit = rate_limit_per_minute(plan_id)
     now = time.monotonic()
     window = _rate_windows[clerk_user_id]
     while window and now - window[0] > 60:
         window.popleft()
     if len(window) >= limit:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded ({limit} requests/min). Upgrade or wait a moment.",
+        raise QuotaExceeded(
+            f"Rate limit exceeded ({limit} requests/min on this plan). "
+            "Wait a few seconds and retry.",
+            kind="rate",
         )
     window.append(now)
 
 
-def enforce_query_quota(clerk_user_id: str) -> dict:
-    """Check quota before query; returns billing snapshot. Raises HTTPException if blocked."""
+def reset_rate_limits() -> None:
+    """Clear in-memory rate windows (tests)."""
+    _rate_windows.clear()
+
+
+def enforce_quota(clerk_user_id: str) -> dict:
+    """Check limits before a metered request. Raises :class:`QuotaExceeded` if blocked."""
     status = user_billing_status(clerk_user_id)
-    plan_id = status["plan"]
-    limit = status["daily_limit"]
-    used = status["daily_used"]
+    limit = status["monthly_limit"]
+    used = status["monthly_used"]
 
-    _check_rate_limit(clerk_user_id, plan_id)
-
-    if limit is not None and used >= limit:
-        raise HTTPException(
-            status_code=429,
-            detail=(
-                f"Daily limit reached ({used}/{limit} extractions). "
-                "Upgrade your plan for more capacity."
-            ),
+    if used >= limit:
+        raise QuotaExceeded(
+            f"Monthly request limit reached ({used:,}/{limit:,} on the "
+            f"{status['plan_name']} plan). It resets on {status['resets_at'][:10]} (UTC); "
+            "upgrade at /pricing for a higher allowance.",
+            kind="monthly",
+            status=status,
         )
+    _check_rate_limit(clerk_user_id, status["plan"])
     return status
 
 
-def record_query_usage(clerk_user_id: str) -> dict:
-    count = increment_daily_usage(clerk_user_id)
-    status = user_billing_status(clerk_user_id)
-    status["daily_used"] = count
-    if status["daily_remaining"] is not None:
-        status["daily_remaining"] = max(0, status["daily_limit"] - count)
+def record_usage(clerk_user_id: str, status: dict | None = None) -> dict:
+    """Count one metered request and return the updated billing snapshot."""
+    count = increment_monthly_usage(clerk_user_id)
+    status = dict(status) if status else user_billing_status(clerk_user_id)
+    status["monthly_used"] = count
+    status["monthly_remaining"] = max(0, status["monthly_limit"] - count)
     return status

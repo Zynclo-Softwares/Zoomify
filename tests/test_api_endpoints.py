@@ -1,155 +1,137 @@
-"""Additional HTTP coverage for FastAPI routes."""
+"""HTTP coverage for the account API around the MCP server."""
 
 from __future__ import annotations
 
-import json
 
-import pytest
-
-from zoomify import byok_crypto
-from zoomify.db import get_user, reset_memory_store
+from zoomify.db import get_user, upsert_user
 
 
-@pytest.fixture(autouse=True)
-def _billing_memory():
-    from zoomify.platform_keys import reset_platform_key_store
-
-    reset_memory_store()
-    reset_platform_key_store()
-    yield
-    reset_memory_store()
-    reset_platform_key_store()
-
-
-def test_health_extended_fields(client):
+def test_health(client):
     r = client.get("/api/health")
     assert r.status_code == 200
     data = r.json()
+    assert data["ok"] is True
+    assert data["mcp_path"] == "/mcp"
+    assert data["metering_enabled"] is True
     assert data["mongodb_enabled"] is False
     assert data["stripe_webhook_configured"] is False
 
 
-def test_openrouter_health_ok(client, monkeypatch, byok_headers):
-    monkeypatch.setattr(
-        "server.check_openrouter_health",
-        lambda api_key: {"ok": True},
-    )
-    r = client.get("/api/openrouter/health", headers=byok_headers)
+def test_mcp_info_lists_tools_and_skills(client, monkeypatch):
+    r = client.get("/api/mcp/info")
     assert r.status_code == 200
-    assert r.json() == {"ok": True}
+    data = r.json()
+    assert data["url"].endswith("/mcp")
+    assert data["auth"]["required"] is False
+    names = [t["name"] for t in data["tools"]]
+    assert names[:2] == ["open_image", "zoom"]
+    assert [t["name"] for t in data["tools"] if t["metered"]] == ["open_image", "zoom"]
+    assert data["skills"][0]["name"] == "zoom-basics"
 
-
-def test_openrouter_health_requires_key(client):
-    r = client.get("/api/openrouter/health")
-    assert r.status_code == 401
-
-
-def test_byok_public_key(client, byok_headers):
-    r = client.get("/api/byok/public-key")
-    assert r.status_code == 200
-    assert "BEGIN PUBLIC KEY" in r.json()["public_key_pem"]
-
-
-def test_byok_public_key_unavailable(client, monkeypatch):
-    monkeypatch.setattr("server.is_byok_ready", lambda: False)
-    r = client.get("/api/byok/public-key")
-    assert r.status_code == 503
-    assert "not configured" in r.json()["detail"].lower()
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://zoomify.example.com/")
+    data = client.get("/api/mcp/info").json()
+    assert data["url"] == "https://zoomify.example.com/mcp"
+    assert data["upload_url"] == "https://zoomify.example.com/api/images"
 
 
 def test_auth_me_dev_bypass(client):
     r = client.get("/api/auth/me")
     assert r.status_code == 200
-    data = r.json()
-    assert data["user_id"] == "dev-local"
-    assert data["bypass"] is True
-
-
-def test_models_rejects_invalid_encrypted_key(client, monkeypatch):
-    monkeypatch.delenv("BYOK_PRIVATE_KEY", raising=False)
-    byok_crypto.reset_byok_cache()
-    private_pem, public_pem = byok_crypto.generate_keypair_pem()
-    monkeypatch.setenv("BYOK_PRIVATE_KEY", private_pem)
-    byok_crypto.reset_byok_cache()
-    bad = byok_crypto.encrypt_api_key("sk-or-test", public_pem=public_pem)[:-5] + "xxxxx"
-
-    r = client.get("/api/models", headers={byok_crypto.HEADER_NAME: bad})
-    assert r.status_code == 400
-    assert "invalid" in r.json()["detail"].lower()
-
-
-def test_delete_session(client):
-    r = client.delete("/api/session/session-abc")
-    assert r.status_code == 200
-    assert r.json()["ok"] is True
+    assert r.json()["bypass"] is True
 
 
 def test_openapi_and_redoc(client):
-    openapi = client.get("/api/openapi.json")
-    assert openapi.status_code == 200
-    spec = openapi.json()
-    paths = spec["paths"]
-    assert "/api/query" in paths
-    assert "/api/billing/plans" in paths
-
-    schemes = spec["components"]["securitySchemes"]
-    assert "ZoomifyAuth" in schemes
-    assert "EncryptedOpenRouterKey" in schemes
-    assert schemes["EncryptedOpenRouterKey"]["name"] == "X-Encrypted-Api-Key"
-    assert "zfy_live" in schemes["ZoomifyAuth"]["description"]
-
-    assert "platform key" in spec["info"]["description"].lower()
-    assert "X-Encrypted-Api-Key" in spec["info"]["description"]
-
-    query_op = paths["/api/query"]["post"]
-    assert query_op["security"] == [
-        {"ZoomifyAuth": [], "EncryptedOpenRouterKey": []},
-    ]
-    form_schema = spec["components"]["schemas"]["Body_query_api_query_post"]
-    assert "query" in form_schema["properties"]
-    assert form_schema["properties"]["query"]["examples"] == [
-        "Read all part numbers and quantities"
-    ]
-
-    redoc = client.get("/api/redoc")
-    assert redoc.status_code == 200
+    assert client.get("/api/docs").status_code == 200
+    assert client.get("/api/redoc").status_code == 200
+    schema = client.get("/api/openapi.json").json()
+    assert "ZoomifyAuth" in schema["components"]["securitySchemes"]
+    assert "Metering" in schema["info"]["description"]
 
 
-def test_billing_plans_structure(client):
-    r = client.get("/api/billing/plans")
+# --------------------------------------------------------------- skills
+
+
+def test_skills_endpoints(client):
+    data = client.get("/api/skills").json()
+    names = [s["name"] for s in data["skills"]]
+    assert names[0] == "zoom-basics"
+    assert "engineering-drawings" in names
+    assert all(s["body"] and s["description"] for s in data["skills"])
+
+    r = client.get("/api/skills/zoom-basics.md")
     assert r.status_code == 200
-    data = r.json()
-    plan_ids = {p["id"] for p in data["plans"]}
-    assert plan_ids == {"free", "starter", "pro"}
-    assert data["premium_schema"]["name"]
+    assert r.text.startswith("---\nname: zoom-basics\n")
+    assert client.get("/api/skills/nope.md").status_code == 404
 
 
-def test_billing_status_after_usage(client, monkeypatch, byok_headers):
-    monkeypatch.setattr(
-        "server.run_query_stream",
-        lambda **_: iter([{"type": "assistant", "content": "ok"}]),
-    )
-    client.post("/api/query", data={"query": "hello"}, headers=byok_headers)
-    r = client.get("/api/billing/status")
+# --------------------------------------------------------------- uploads
+
+
+def test_upload_image_returns_id(client, small_png_bytes):
+    r = client.post("/api/images", files={"file": ("plan.png", small_png_bytes, "image/png")})
     assert r.status_code == 200
-    assert r.json()["daily_used"] == 1
-    assert r.json()["daily_remaining"] == r.json()["daily_limit"] - 1
+    body = r.json()
+    assert body["image_id"].startswith("img_")
+    assert body["kind"] == "image"
+    assert body["pages"] == 1
+    assert body["bytes"] == len(small_png_bytes)
+
+    from zoomify.images import uploads
+
+    assert uploads.get("dev-local", body["image_id"]).data == small_png_bytes
+    assert uploads.get("someone-else", body["image_id"]) is None
 
 
-def test_query_quota_message(client, monkeypatch, byok_headers):
-    monkeypatch.setattr("zoomify.billing._check_rate_limit", lambda *_: None)
-    monkeypatch.setattr(
-        "server.run_query_stream",
-        lambda **_: iter([{"type": "assistant", "content": "ok"}]),
-    )
-    from zoomify.plans import PLANS
+def test_upload_pdf_reports_pages(client, pdf_bytes):
+    r = client.post("/api/images", files={"file": ("set.pdf", pdf_bytes, "application/pdf")})
+    assert r.status_code == 200
+    assert r.json()["kind"] == "pdf"
+    assert r.json()["pages"] == 2
 
-    for _ in range(PLANS["free"].daily_limit):
-        client.post("/api/query", data={"query": "x"}, headers=byok_headers)
 
-    r = client.post("/api/query", data={"query": "x"}, headers=byok_headers)
-    assert r.status_code == 429
-    assert "daily limit" in r.json()["detail"].lower()
+def test_upload_rejects_non_image(client):
+    r = client.post("/api/images", files={"file": ("a.txt", b"hello", "text/plain")})
+    assert r.status_code == 422
+    assert "Unsupported file" in r.json()["detail"]
+
+
+def test_upload_rejects_empty(client):
+    r = client.post("/api/images", files={"file": ("a.png", b"", "image/png")})
+    assert r.status_code == 422
+
+
+def test_upload_enforces_plan_size(client, small_png_bytes, monkeypatch):
+    import server
+    from zoomify.plans import PLANS, Plan
+
+    tiny = Plan(**{**PLANS["free"].__dict__, "max_image_mb": 0})
+    monkeypatch.setattr(server, "plan_for_id", lambda _id: tiny)
+    r = client.post("/api/images", files={"file": ("plan.png", small_png_bytes, "image/png")})
+    assert r.status_code == 413
+
+
+def test_upload_requires_auth_when_clerk_enabled(client, small_png_bytes, monkeypatch):
+    from zoomify import clerk_auth
+    from zoomify.platform_keys import create_platform_key
+
+    monkeypatch.setenv("CLERK_JWKS_URL", "https://example.com/jwks.json")
+    clerk_auth.reset_jwks_cache()
+    files = {"file": ("plan.png", small_png_bytes, "image/png")}
+    assert client.post("/api/images", files=files).status_code == 401
+
+    key = create_platform_key("user_up")["key"]
+    r = client.post("/api/images", files=files, headers={"Authorization": f"Bearer {key}"})
+    assert r.status_code == 200
+
+
+# --------------------------------------------------------------- billing
+
+
+def test_billing_status_reflects_plan(client):
+    upsert_user("dev-local", plan="pro", subscriptionStatus="active")
+    data = client.get("/api/billing/status").json()
+    assert data["plan"] == "pro"
+    assert data["max_open_images"] == 25
 
 
 def test_billing_webhook_subscription_deleted(client):
@@ -190,20 +172,3 @@ def test_billing_webhook_invalid_payload(client):
         headers={"Content-Type": "application/json"},
     )
     assert r.status_code == 400
-
-
-def test_query_stream_error_event(client, small_png_bytes, monkeypatch, byok_headers):
-    def fake_run(**kwargs):
-        yield {"type": "session", "session_id": "s-err"}
-        yield {"type": "error", "message": "Agent failed"}
-
-    monkeypatch.setattr("server.run_query_stream", fake_run)
-    r = client.post(
-        "/api/query",
-        data={"query": "x"},
-        files={"image": ("t.png", small_png_bytes, "image/png")},
-        headers=byok_headers,
-    )
-    assert r.status_code == 200
-    lines = [json.loads(ln) for ln in r.text.strip().split("\n") if ln]
-    assert lines[-1]["type"] == "error"

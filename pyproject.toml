@@ -1,12 +1,10 @@
 [project]
 name = "zoomify"
-version = "0.1.0"
-description = "Gradio AI agent that extracts information from any hard-to-read image (high-res, very large/long, dense, or tiny-font) using grid + zoom vision tools."
+version = "1.0.0"
+description = "Remote MCP server that gives any AI agent grid + zoom tools for reading hard-to-read images and PDFs (high-res, very large/long, dense, or tiny-font)."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "gradio>=4.44",
-    "openai>=1.40",
     "pillow>=10.0",
     "python-dotenv>=1.0",
     "fastapi>=0.115",
@@ -15,6 +13,9 @@ dependencies = [
     "pyjwt[crypto]>=2.8",
     "pymongo>=4.10",
     "stripe>=11.0",
+    "mcp>=1.12",
+    "pypdfium2>=4.30",
+    "httpx>=0.27",
 ]
 
 [build-system]

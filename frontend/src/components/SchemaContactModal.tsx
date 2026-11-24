@@ -77,12 +77,13 @@ export default function SchemaContactModal({
 				>
 					×
 				</button>
-				<p className="schema-modal-kicker">Premium schema service</p>
+				<p className="schema-modal-kicker">Custom skills &amp; enterprise</p>
 				<h2 id="schema-modal-title">Tell us about your documents</h2>
 				<p className="schema-modal-lead">
-					Zynclo designs custom extraction schemas for invoices, forms, IDs, and
-					domain-specific layouts. Share a few details and we&apos;ll open a
-					tracking ticket for our team.
+					Zynclo writes agent skills tuned to your drawings, forms, and house
+					conventions, and can arrange higher limits or a private deployment.
+					Share a few details and we&apos;ll open a tracking ticket for our
+					team.
 				</p>
 				<form className="schema-modal-form" onSubmit={onSubmit}>
 					<label>
@@ -112,13 +113,13 @@ export default function SchemaContactModal({
 						/>
 					</label>
 					<label>
-						What do you need extracted?
+						What do you need?
 						<textarea
 							name="message"
 							required
 							rows={4}
 							maxLength={8000}
-							placeholder="Describe your document types, fields, and workflow…"
+							placeholder="Describe your document types, agents, and expected volume…"
 							value={message}
 							onChange={(e) => setMessage(e.target.value)}
 							disabled={busy}

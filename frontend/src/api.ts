@@ -1,37 +1,6 @@
 import { ApiError, readApiErrorMessage } from "./apiErrors";
 import { authHeaders } from "./auth";
-import { byokHeaders } from "./byok";
 import { showErrorToast } from "./toast";
-
-export class ApiKeyInvalidError extends Error {
-	constructor() {
-		super(
-			"Your saved key no longer works. Please enter your OpenRouter key again.",
-		);
-		this.name = "ApiKeyInvalidError";
-	}
-}
-
-export type ChatMessage = {
-	id: string;
-	role: "user" | "assistant";
-	content: string;
-};
-
-export type StreamEvent =
-	| { type: "session"; session_id: string }
-	| { type: "user"; content: string }
-	| { type: "trail"; html: string }
-	| { type: "assistant"; content: string }
-	| {
-			type: "schema";
-			structured: boolean;
-			schema_id: string | null;
-			source: string;
-	  }
-	| { type: "error"; message: string }
-	| { type: "cancelled" }
-	| { type: "done" };
 
 type FetchOptions = RequestInit & { silent?: boolean };
 
@@ -40,9 +9,6 @@ async function fetchWithAuth(input: string, init?: FetchOptions) {
 	const headers = new Headers(requestInit.headers);
 	const auth = await authHeaders();
 	for (const [key, value] of Object.entries(auth)) {
-		headers.set(key, value as string);
-	}
-	for (const [key, value] of Object.entries(byokHeaders())) {
 		headers.set(key, value as string);
 	}
 	const res = await fetch(input, { ...requestInit, headers });
@@ -54,48 +20,81 @@ async function fetchWithAuth(input: string, init?: FetchOptions) {
 	return res;
 }
 
-export async function fetchModels(): Promise<{
-	choices: string[];
-	default: string;
-}> {
-	try {
-		const res = await fetchWithAuth("/api/models");
-		return res.json();
-	} catch (err) {
-		if (err instanceof ApiError && err.status === 400) {
-			throw new ApiKeyInvalidError();
-		}
-		throw err;
-	}
-}
-
-export async function fetchHealth(): Promise<{
+export type Health = {
 	ok: boolean;
-	byok_ready?: boolean;
+	version?: string;
 	clerk_enabled?: boolean;
+	metering_enabled?: boolean;
 	mongodb_enabled?: boolean;
 	stripe_webhook_configured?: boolean;
-}> {
+};
+
+export async function fetchHealth(): Promise<Health> {
 	try {
 		const res = await fetch("/api/health");
 		if (!res.ok) return { ok: false };
 		const data = await res.json();
-		return { ok: Boolean(data.ok), ...data };
+		return { ...data, ok: Boolean(data.ok) };
 	} catch {
 		return { ok: false };
 	}
 }
 
-export async function fetchOpenRouterHealth(): Promise<{
-	ok: boolean;
-	detail?: string;
-}> {
-	try {
-		const res = await fetchWithAuth("/api/openrouter/health", { silent: true });
-		return res.json();
-	} catch {
-		return { ok: false, detail: "Could not reach OpenRouter health check" };
+export type McpTool = { name: string; metered: boolean; summary: string };
+
+export type Skill = {
+	name: string;
+	title: string;
+	description: string;
+	uri: string;
+	body?: string;
+};
+
+export type McpInfo = {
+	name: string;
+	version: string;
+	transport: string;
+	url: string;
+	upload_url: string;
+	auth: { type: string; header: string; format: string; required: boolean };
+	tools: McpTool[];
+	skills: Skill[];
+};
+
+export async function fetchMcpInfo(): Promise<McpInfo> {
+	const res = await fetch("/api/mcp/info");
+	if (!res.ok) {
+		throw new ApiError(await readApiErrorMessage(res), res.status);
 	}
+	return res.json();
+}
+
+export async function fetchSkills(): Promise<Skill[]> {
+	const res = await fetch("/api/skills");
+	if (!res.ok) {
+		throw new ApiError(await readApiErrorMessage(res), res.status);
+	}
+	return (await res.json()).skills;
+}
+
+export type UploadedImage = {
+	image_id: string;
+	filename: string;
+	kind: "image" | "pdf";
+	pages: number;
+	bytes: number;
+	expires_in_seconds: number;
+	expires_at: string;
+};
+
+export async function uploadImage(file: File): Promise<UploadedImage> {
+	const form = new FormData();
+	form.append("file", file);
+	const res = await fetchWithAuth("/api/images", {
+		method: "POST",
+		body: form,
+	});
+	return res.json();
 }
 
 export type BillingPlan = {
@@ -104,10 +103,12 @@ export type BillingPlan = {
 	price_monthly_usd: number | null;
 	price_yearly_usd: number | null;
 	yearly_discount_percent: number | null;
-	daily_limit: number | null;
+	monthly_limit: number;
+	rate_limit_per_minute: number;
+	max_image_mb: number;
+	max_open_images: number;
 	description: string;
 	highlights: string[];
-	unlimited: boolean;
 	checkout: { monthly: string | null; yearly: string | null } | null;
 };
 
@@ -115,8 +116,8 @@ export type BillingPlansResponse = {
 	plans: BillingPlan[];
 	yearly_discount_percent: number;
 	money_back_days: number;
-	metered_endpoint: string;
-	premium_schema: {
+	metered_tools: string[];
+	custom_skills: {
 		name: string;
 		description: string;
 		highlights: string[];
@@ -128,10 +129,14 @@ export type BillingStatus = {
 	plan: string;
 	plan_name: string;
 	subscription_status: string;
-	daily_limit: number | null;
-	daily_used: number;
-	daily_remaining: number | null;
-	unlimited: boolean;
+	period: string;
+	monthly_limit: number;
+	monthly_used: number;
+	monthly_remaining: number;
+	resets_at: string;
+	rate_limit_per_minute: number;
+	max_image_mb: number;
+	max_open_images: number;
 	current_period_end: string | null;
 };
 
@@ -179,13 +184,6 @@ export async function rotatePlatformKey(): Promise<PlatformKeyCreated> {
 	return res.json();
 }
 
-export async function deleteSession(sessionId: string): Promise<void> {
-	await fetchWithAuth(`/api/session/${sessionId}`, {
-		method: "DELETE",
-		silent: true,
-	});
-}
-
 export type SchemaInquiryPayload = {
 	name: string;
 	email: string;
@@ -212,68 +210,4 @@ export async function submitSchemaInquiry(
 		throw new ApiError(message, res.status);
 	}
 	return res.json();
-}
-
-function isQueryAbortError(err: unknown, signal?: AbortSignal): boolean {
-	if (signal?.aborted) return true;
-	return err instanceof DOMException && err.name === "AbortError";
-}
-
-export async function* streamQuery(params: {
-	query: string;
-	image?: File | null;
-	model: string;
-	sessionId?: string | null;
-	signal?: AbortSignal;
-}): AsyncGenerator<StreamEvent> {
-	const form = new FormData();
-	form.append("query", params.query);
-	form.append("model", params.model);
-	if (params.sessionId) form.append("session_id", params.sessionId);
-	if (params.image) form.append("image", params.image);
-
-	let res: Response;
-	try {
-		res = await fetchWithAuth("/api/query", {
-			method: "POST",
-			body: form,
-			signal: params.signal,
-		});
-	} catch (err) {
-		if (isQueryAbortError(err, params.signal)) return;
-		if (err instanceof ApiError) throw err;
-		throw err;
-	}
-
-	if (!res.body) {
-		const message = "The extraction stream could not be started.";
-		showErrorToast(message);
-		throw new ApiError(message, res.status);
-	}
-
-	const reader = res.body.getReader();
-	const decoder = new TextDecoder();
-	let buffer = "";
-
-	try {
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
-			const lines = buffer.split("\n");
-			buffer = lines.pop() ?? "";
-			for (const line of lines) {
-				if (!line.trim()) continue;
-				yield JSON.parse(line) as StreamEvent;
-			}
-		}
-		if (buffer.trim()) {
-			yield JSON.parse(buffer) as StreamEvent;
-		}
-	} catch (err) {
-		if (isQueryAbortError(err, params.signal)) return;
-		throw err;
-	} finally {
-		reader.releaseLock();
-	}
 }

@@ -66,11 +66,14 @@ Every change goes through **one issue → one patch branch → one PR**.
 
 ## Repo notes for agents
 
-- Package lives under `src/zoomify/`; legacy Gradio entrypoint is `app.py`
-- **Primary UI:** React (`frontend/`) + FastAPI (`server.py`) — `uv run uvicorn server:app`
+- Zoomify is a **remote MCP server** (no built-in LLM agent). Package lives under `src/zoomify/`
+- `server.py` (FastAPI) serves the MCP endpoint at `/mcp`, the account API under `/api`, and the React UI — `uv run uvicorn server:app`
+- MCP tools, prompts, resources, and auth: `src/zoomify/mcp_server.py` (official `mcp` SDK v2, `MCPServer`)
+- Skills are Markdown files in `src/zoomify/skills/` — adding a file is enough to expose a new skill
+- Metering: only `open_image` and `zoom` count as requests; limits live in `src/zoomify/plans.py`
 - Session state is a **zoom stack** (`ImageState.path`); views render from `original + path`
 - Grid drawing: `src/zoomify/gridder.py`; zoom/crop/path: `src/zoomify/gridzoom.py`
-- Business schemas: `src/zoomify/schema_registry.py` (placeholder; metadata key `structure-zoomify`)
+- Frontend (`frontend/`): landing, pricing, and the Connect page (`src/pages/ConnectPage.tsx`, snippets in `src/connectSnippets.ts`)
 - `.vscode/` and `Example Files/` are gitignored — do not commit them
 - License: MIT — keep copyright and credit to **Zynclo Softwares**
 

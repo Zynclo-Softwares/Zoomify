@@ -47,17 +47,17 @@ export default function PricingSection({
 		return <p className="pricing-loading">Loading plans…</p>;
 	}
 
-	const premium = plansData.premium_schema;
+	const premium = plansData.custom_skills;
 
 	return (
 		<section className="pricing-section" id="plans">
 			<div className="pricing-intro">
-				<p className="pricing-kicker">Platform pricing</p>
-				<h2>Pay for Zoomify server capacity — bring your own model key</h2>
+				<p className="pricing-kicker">Pricing</p>
+				<h2>Free to start. Pay only when your agents get busy.</h2>
 				<p className="pricing-lead">
-					OpenRouter charges are separate (your key, your bill). We meter{" "}
-					<code>{plansData.metered_endpoint}</code> — one image extraction per
-					request. Model listing is free.
+					A request is one <code>open_image</code> or <code>zoom</code> tool
+					call. Undo, redo, restore, uploads, and skills are always free.
+					Reading one drawing typically takes 5 to 15 requests.
 				</p>
 				<div className="pricing-badges">
 					<span className="pricing-badge">
@@ -121,9 +121,7 @@ export default function PricingSection({
 								)}
 							</div>
 							<p className="pricing-limit">
-								{plan.unlimited
-									? "Unlimited extractions*"
-									: `${plan.daily_limit} extractions / day`}
+								{plan.monthly_limit.toLocaleString("en-US")} requests / month
 							</p>
 							<ul className="pricing-highlights">
 								{plan.highlights.map((h) => (
@@ -160,7 +158,7 @@ export default function PricingSection({
 						<span className="amount custom">Custom</span>
 					</div>
 					<p className="pricing-limit">
-						One-time or retainer — scoped to your docs
+						For teams with their own document standards
 					</p>
 					<ul className="pricing-highlights">
 						{premium.highlights.map((h) => (
@@ -172,22 +170,23 @@ export default function PricingSection({
 						className="schema-contact-trigger pricing-cta ghost"
 						onClick={openSchemaContact}
 					>
-						Request schema →
+						Talk to us →
 					</button>
 				</article>
 			</div>
 
 			<p className="pricing-footnote">
-				* Pro unlimited subject to fair-use rate limits to prevent abuse. Need
-				the HTTP API? Explore interactive docs at{" "}
-				<a href="/api/docs" target="_blank" rel="noopener noreferrer">
-					/api/docs
-				</a>{" "}
-				(OpenAPI at{" "}
-				<a href="/api/openapi.json" target="_blank" rel="noopener noreferrer">
-					/api/openapi.json
+				Allowances reset on the 1st of each month (UTC). When a limit is reached
+				your agent gets a clear message — there are no overage charges. Zoomify
+				is open source (MIT), so you can also{" "}
+				<a
+					href="https://github.com/Zynclo-Softwares/Zoomify#self-hosting"
+					target="_blank"
+					rel="noopener noreferrer"
+				>
+					host it yourself
 				</a>
-				).
+				.
 			</p>
 		</section>
 	);

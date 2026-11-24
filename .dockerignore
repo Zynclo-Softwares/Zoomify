@@ -23,6 +23,3 @@ terraform
 !README.md
 .cursor
 agent-transcripts
-
-# Legacy Gradio UI (not used in production image)
-app.py

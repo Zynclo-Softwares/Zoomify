@@ -1,6 +1,6 @@
 resource "stripe_product" "starter" {
   name        = "${title(var.app_name)} Starter (${var.environment})"
-  description = "500 extractions/day on the Zoomify platform layer (BYOK)."
+  description = "25,000 Zoomify MCP requests per month."
   metadata = merge(local.common_metadata, {
     plan = "starter"
   })
@@ -8,7 +8,7 @@ resource "stripe_product" "starter" {
 
 resource "stripe_product" "pro" {
   name        = "${title(var.app_name)} Pro (${var.environment})"
-  description = "Unlimited extractions with fair-use rate limits (BYOK)."
+  description = "150,000 Zoomify MCP requests per month."
   metadata = merge(local.common_metadata, {
     plan = "pro"
   })

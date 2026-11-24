@@ -11,7 +11,7 @@ import ToastHost from "./components/ToastHost";
 import LandingPage from "./pages/LandingPage";
 import PricingPage from "./pages/PricingPage";
 
-const ProductPage = lazy(() => import("./pages/ProductPage"));
+const ConnectPage = lazy(() => import("./pages/ConnectPage"));
 const SignInPage = lazy(() => import("./pages/SignInPage"));
 const SignUpPage = lazy(() => import("./pages/SignUpPage"));
 
@@ -26,17 +26,18 @@ const routes = (
 			<Routes>
 				<Route path="/" element={<LandingPage />} />
 				<Route path="/pricing" element={<PricingPage />} />
-				<Route path="/product" element={<ProductPage />} />
+				<Route path="/connect" element={<ConnectPage />} />
+				<Route path="/product" element={<Navigate to="/connect" replace />} />
 				<Route
 					path="/sign-in/*"
 					element={
-						clerkEnabled ? <SignInPage /> : <Navigate to="/product" replace />
+						clerkEnabled ? <SignInPage /> : <Navigate to="/connect" replace />
 					}
 				/>
 				<Route
 					path="/sign-up/*"
 					element={
-						clerkEnabled ? <SignUpPage /> : <Navigate to="/product" replace />
+						clerkEnabled ? <SignUpPage /> : <Navigate to="/connect" replace />
 					}
 				/>
 				<Route path="*" element={<Navigate to="/" replace />} />

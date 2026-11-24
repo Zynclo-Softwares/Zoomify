@@ -1,4 +1,4 @@
-"""Create GitHub issues for inbound schema-service inquiries."""
+"""Create GitHub issues for inbound custom-skills / enterprise inquiries."""
 
 from __future__ import annotations
 

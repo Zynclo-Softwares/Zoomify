@@ -18,8 +18,8 @@ help:
 	@echo ""
 	@echo "  Development"
 	@echo "    make install          Install Python (uv) + frontend (bun) deps"
-	@echo "    make dev              Backend + Stripe webhooks + Vite dev UI"
-	@echo "    make backend          FastAPI only → http://127.0.0.1:8000"
+	@echo "    make dev              MCP server + Stripe webhooks + Vite dev UI"
+	@echo "    make backend          API + MCP endpoint → http://127.0.0.1:8000 (/mcp)"
 	@echo "    make frontend         Vite dev server → http://127.0.0.1:5173"
 	@echo ""
 	@echo "  Production bundle (Docker)"
@@ -106,8 +106,8 @@ frontend-build:
 format: format-py format-ts format-tf
 
 format-py:
-	uv run ruff format src tests server.py app.py
-	uv run ruff check --fix src tests server.py app.py
+	uv run ruff format src tests server.py
+	uv run ruff check --fix src tests server.py
 
 format-ts:
 	cd frontend && bun run format

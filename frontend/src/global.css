@@ -38,11 +38,50 @@ body {
 	background: var(--bg);
 }
 
-#root:has(.app) {
-	height: 100dvh;
-	max-height: 100dvh;
-	overflow: hidden;
-	background: #0a0a0a;
+.card {
+	background: var(--card);
+	border: 1px solid var(--card-border);
+	border-radius: var(--radius);
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+	padding: 0.5rem 0.9rem;
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm);
+	font: inherit;
+	font-size: 0.85rem;
+	font-weight: 600;
+	cursor: pointer;
+	text-decoration: none;
+	transition:
+		background 0.15s,
+		border-color 0.15s,
+		opacity 0.15s;
+}
+
+.btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.btn.primary {
+	background: linear-gradient(135deg, #3b82f6, #0055ff);
+	color: #fff;
+	box-shadow: 0 8px 24px rgba(0, 85, 255, 0.28);
+}
+
+.btn.ghost {
+	background: rgba(51, 65, 85, 0.4);
+	border-color: rgba(148, 163, 184, 0.2);
+	color: var(--text);
+}
+
+.btn.ghost:hover:not(:disabled) {
+	background: rgba(71, 85, 105, 0.6);
 }
 
 .page-loading {

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from zoomify import gridder
-from zoomify.tools import ZoomStep, encode_image, run_tool
+from zoomify.tools import ZoomStep, encode_view, run_tool
 
 
 # --------------------------------------------------------------- state setup
@@ -163,26 +163,30 @@ def test_auto_regrid_cols_when_omitted(state):
 # --------------------------------------------------------------- encoding
 
 
-def test_encode_image_data_uri(small_img):
-    uri = encode_image(small_img, max_side=200, fmt="PNG")
-    assert uri.startswith("data:image/png;base64,")
-
-
-def test_encode_image_jpeg_mime(small_img):
-    uri = encode_image(small_img, max_side=64, fmt="JPEG")
-    assert uri.startswith("data:image/jpeg;base64,")
-
-
-def test_encode_image_downscales(small_img):
-    import base64
+def test_encode_view_png_downscaled(small_img):
     import io
 
     from PIL import Image
 
-    uri = encode_image(small_img, max_side=100, fmt="PNG")
-    raw = base64.b64decode(uri.split(",", 1)[1])
-    decoded = Image.open(io.BytesIO(raw))
-    assert max(decoded.size) <= 100
+    data, fmt = encode_view(small_img, max_side=100)
+    assert fmt == "png"
+    assert max(Image.open(io.BytesIO(data)).size) <= 100
+
+
+def test_encode_view_falls_back_to_jpeg_when_png_is_heavy(small_img):
+    data, fmt = encode_view(small_img, max_png_bytes=10)
+    assert fmt == "jpeg"
+    assert data[:2] == b"\xff\xd8"
+
+
+def test_zoom_factor_lowered_for_huge_selection(state, monkeypatch):
+    from zoomify import tools
+
+    monkeypatch.setattr(tools, "MAX_ZOOMED_PIXELS", 400 * 300 * 4)
+    res = run_tool("zoom", {"select": "1-6-A-H", "zoom": 8}, state)
+    assert res.image is not None
+    assert "lowered from 8x" in res.text
+    assert state.path[-1].zoom <= 2.01
 
 
 def test_zoom_step_label():

@@ -92,11 +92,11 @@ variable "secret_env_vars" {
   type        = map(string)
   default     = {}
   sensitive   = true
-  description = "Sensitive service variables (BYOK key, MongoDB URI, Stripe secret key)."
+  description = "Sensitive service variables (MongoDB URI, Stripe secret key, GitHub token)."
 }
 
 variable "secret_env_var_names" {
   type        = list(string)
-  default     = ["BYOK_PRIVATE_KEY", "MONGODB_URI", "STRIPE_SECRET_KEY"]
+  default     = ["MONGODB_URI", "STRIPE_SECRET_KEY"]
   description = "Names of secret_env_vars to sync (non-sensitive keys for for_each)."
 }
