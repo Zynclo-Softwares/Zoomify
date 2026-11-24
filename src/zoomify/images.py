@@ -27,6 +27,9 @@ from PIL import Image, UnidentifiedImageError
 UPLOAD_ID_PREFIX = "img_"
 UPLOAD_TTL_SECONDS = 60 * 60
 MAX_UPLOADS_PER_USER = 10
+UPLOAD_TICKET_PREFIX = "upl_"
+UPLOAD_TICKET_TTL_SECONDS = 15 * 60
+MAX_TICKETS_PER_USER = 10
 MAX_REDIRECTS = 3
 FETCH_TIMEOUT_SECONDS = 20.0
 PDF_RENDER_DPI = 200
@@ -240,21 +243,85 @@ class Upload:
         return self.created_at + UPLOAD_TTL_SECONDS
 
 
+@dataclass(frozen=True)
+class UploadTicket:
+    """One-time permission to upload a single file without an API key.
+
+    Issued to an agent by the ``request_upload`` MCP tool. The ``token`` is the
+    only credential: it is unguessable, short-lived, bound to one account, and
+    can only ever create the upload ``image_id``.
+    """
+
+    token: str
+    owner: str
+    image_id: str
+    max_bytes: int
+    created_at: float
+    filename: str = ""
+
+    @property
+    def expires_at(self) -> float:
+        return self.created_at + UPLOAD_TICKET_TTL_SECONDS
+
+
 class UploadStore:
-    """Short-lived, per-process store for files uploaded via ``POST /api/images``."""
+    """Short-lived, per-process store for uploaded files and upload tickets."""
 
     def __init__(self) -> None:
         self._items: dict[str, Upload] = {}
+        self._tickets: dict[str, UploadTicket] = {}
         self._lock = threading.Lock()
 
     def _purge(self, now: float) -> None:
         for key in [k for k, u in self._items.items() if u.expires_at <= now]:
             del self._items[key]
+        for key in [k for k, t in self._tickets.items() if t.expires_at <= now]:
+            del self._tickets[key]
 
-    def put(self, owner: str, data: bytes, filename: str, kind: str, pages: int) -> Upload:
+    def issue_ticket(self, owner: str, max_bytes: int, filename: str = "") -> UploadTicket:
+        now = time.time()
+        ticket = UploadTicket(
+            token=UPLOAD_TICKET_PREFIX + secrets.token_urlsafe(24),
+            owner=owner,
+            image_id=UPLOAD_ID_PREFIX + secrets.token_urlsafe(12),
+            max_bytes=max_bytes,
+            created_at=now,
+            filename=filename,
+        )
+        with self._lock:
+            self._purge(now)
+            mine = sorted(
+                (t for t in self._tickets.values() if t.owner == owner),
+                key=lambda t: t.created_at,
+            )
+            for old in mine[: max(0, len(mine) - MAX_TICKETS_PER_USER + 1)]:
+                del self._tickets[old.token]
+            self._tickets[ticket.token] = ticket
+        return ticket
+
+    def peek_ticket(self, token: str) -> UploadTicket | None:
+        with self._lock:
+            self._purge(time.time())
+            return self._tickets.get(token)
+
+    def redeem_ticket(self, token: str) -> UploadTicket | None:
+        """Consume a ticket; returns ``None`` if it is unknown, expired, or already used."""
+        with self._lock:
+            self._purge(time.time())
+            return self._tickets.pop(token, None)
+
+    def put(
+        self,
+        owner: str,
+        data: bytes,
+        filename: str,
+        kind: str,
+        pages: int,
+        upload_id: str | None = None,
+    ) -> Upload:
         now = time.time()
         upload = Upload(
-            id=UPLOAD_ID_PREFIX + secrets.token_urlsafe(12),
+            id=upload_id or UPLOAD_ID_PREFIX + secrets.token_urlsafe(12),
             owner=owner,
             data=data,
             filename=filename,
@@ -283,6 +350,7 @@ class UploadStore:
     def clear(self) -> None:
         with self._lock:
             self._items.clear()
+            self._tickets.clear()
 
 
 uploads = UploadStore()

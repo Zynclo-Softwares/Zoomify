@@ -68,9 +68,7 @@ def main() -> None:
     if not api_key:
         print(
             json.dumps(
-                {
-                    "error": "Stripe API key required (query stripe_api_key or STRIPE_API_KEY env)"
-                }
+                {"error": "Stripe API key required (query stripe_api_key or STRIPE_API_KEY env)"}
             ),
             file=sys.stderr,
         )

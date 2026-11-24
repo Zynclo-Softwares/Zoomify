@@ -24,11 +24,14 @@ from zoomify.db import ensure_indexes, mongodb_database_name, mongodb_enabled, u
 from zoomify.github_issues import create_schema_inquiry_issue, github_issues_configured
 from zoomify.images import UPLOAD_TTL_SECONDS, ImageError, describe_upload, uploads
 from zoomify.mcp_server import (
+    BASE_URL_STATE_KEY,
     SERVER_VERSION,
+    UPLOAD_PATH,
     USER_STATE_KEY,
     AuthError,
     authenticate,
     build_mcp,
+    public_base_url,
     quotas_disabled,
     tools_catalog,
 )
@@ -133,7 +136,9 @@ async def mcp_endpoint(scope: Scope, receive: Receive, send: Send) -> None:
         await response(scope, receive, send)
         return
 
-    scope.setdefault("state", {})[USER_STATE_KEY] = user
+    state = scope.setdefault("state", {})
+    state[USER_STATE_KEY] = user
+    state[BASE_URL_STATE_KEY] = str(request.base_url).rstrip("/")
     await manager.handle_request(scope, receive, send)
 
 
@@ -170,9 +175,7 @@ def health():
 @app.get("/api/mcp/info", tags=["system"])
 def mcp_info(request: Request):
     """Everything a client needs to connect: endpoint URL, auth scheme, tools, skills."""
-    base = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/") or str(
-        request.base_url
-    ).rstrip("/")
+    base = public_base_url(request)
     return {
         "name": "zoomify",
         "version": SERVER_VERSION,
@@ -267,28 +270,52 @@ async def upload_image(
     user_id = _user_id(user)
     plan = plan_for_id(user_billing_status(user_id)["plan"])
     max_bytes = plan.max_image_mb * 1024 * 1024
+    data = await _read_capped(file, max_bytes)
+    return await _store_upload(user_id, data, file.filename or "")
 
+
+def _too_large(max_bytes: int) -> HTTPException:
+    return HTTPException(
+        status_code=413,
+        detail=f"File is larger than this plan's {max_bytes // (1024 * 1024)} MB limit.",
+    )
+
+
+async def _read_capped(file: UploadFile, max_bytes: int) -> bytes:
     chunks: list[bytes] = []
     total = 0
     while chunk := await file.read(1024 * 1024):
         total += len(chunk)
         if total > max_bytes:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File is larger than the {plan.name} plan's {plan.max_image_mb} MB limit.",
-            )
+            raise _too_large(max_bytes)
         chunks.append(chunk)
-    data = b"".join(chunks)
+    return b"".join(chunks)
+
+
+async def _inspect_upload(data: bytes) -> dict:
     if not data:
         raise HTTPException(status_code=422, detail="The file is empty.")
-
     try:
-        info = await run_in_threadpool(describe_upload, data)
+        return await run_in_threadpool(describe_upload, data)
     except ImageError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+
+async def _store_upload(
+    user_id: str,
+    data: bytes,
+    filename: str,
+    upload_id: str | None = None,
+    info: dict | None = None,
+) -> dict:
+    info = info or await _inspect_upload(data)
     upload = uploads.put(
-        user_id, data, filename=file.filename or "", kind=info["kind"], pages=info["pages"]
+        user_id,
+        data,
+        filename=filename,
+        kind=info["kind"],
+        pages=info["pages"],
+        upload_id=upload_id,
     )
     return {
         "image_id": upload.id,
@@ -299,6 +326,65 @@ async def upload_image(
         "expires_in_seconds": UPLOAD_TTL_SECONDS,
         "expires_at": datetime.fromtimestamp(upload.expires_at, tz=UTC).isoformat(),
     }
+
+
+@app.api_route(UPLOAD_PATH + "/{token}", methods=["PUT", "POST"], tags=["images"])
+@app.api_route(
+    UPLOAD_PATH + "/{token}/{filename}",
+    methods=["PUT", "POST"],
+    tags=["images"],
+    include_in_schema=False,
+)
+async def upload_with_ticket(token: str, request: Request, filename: str = ""):
+    """Upload one file with a one-time link from the `request_upload` MCP tool.
+
+    No API key is needed: the link itself is the permission. It is tied to one
+    account, works for a single file, and expires after 15 minutes. Send the
+    file as the raw request body (`curl -T file <url>`) or as a multipart form
+    with a `file` field. The response repeats the `image_id` to pass to
+    `open_image`.
+    """
+    ticket = uploads.peek_ticket(token)
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "This upload link is unknown, expired, or already used. "
+                "Call the request_upload tool for a new one."
+            ),
+        )
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > ticket.max_bytes + 64 * 1024:
+        raise _too_large(ticket.max_bytes)
+
+    if request.headers.get("content-type", "").lower().startswith("multipart/form-data"):
+        form = await request.form()
+        part = form.get("file")
+        if part is None or isinstance(part, str):
+            raise HTTPException(status_code=422, detail="Send the file in a form field 'file'.")
+        data = await _read_capped(part, ticket.max_bytes)
+        filename = part.filename or filename
+    else:
+        chunks: list[bytes] = []
+        total = 0
+        async for chunk in request.stream():
+            total += len(chunk)
+            if total > ticket.max_bytes:
+                raise _too_large(ticket.max_bytes)
+            chunks.append(chunk)
+        data = b"".join(chunks)
+
+    info = await _inspect_upload(data)
+    # Valid file in hand: spend the ticket (a failed attempt above can be retried).
+    if uploads.redeem_ticket(token) is None:
+        raise HTTPException(status_code=409, detail="This upload link was already used.")
+    return await _store_upload(
+        ticket.owner,
+        data,
+        (filename or ticket.filename)[:200],
+        upload_id=ticket.image_id,
+        info=info,
+    )
 
 
 # --------------------------------------------------------------- billing
