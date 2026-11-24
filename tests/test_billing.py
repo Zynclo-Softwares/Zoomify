@@ -1,23 +1,29 @@
 import pytest
 
-from zoomify.db import reset_memory_store, upsert_user
+from zoomify import billing
+from zoomify.billing import QuotaExceeded, enforce_quota, record_usage
+from zoomify.db import increment_monthly_usage, upsert_user, user_billing_status
 from zoomify.plans import PLANS
 
 
-@pytest.fixture(autouse=True)
-def clear_billing_memory():
-    reset_memory_store()
-    yield
-    reset_memory_store()
+def test_plan_ladder_is_monotonic():
+    free, starter, pro = PLANS["free"], PLANS["starter"], PLANS["pro"]
+    assert free.price_monthly_usd == 0
+    assert free.monthly_limit < starter.monthly_limit < pro.monthly_limit
+    assert free.rate_limit_per_minute < starter.rate_limit_per_minute < pro.rate_limit_per_minute
+    assert free.max_image_mb <= starter.max_image_mb <= pro.max_image_mb
+    assert starter.price_monthly_usd < pro.price_monthly_usd
 
 
 def test_billing_plans_public(client):
     r = client.get("/api/billing/plans")
     assert r.status_code == 200
     data = r.json()
-    assert len(data["plans"]) == 3
-    assert data["metered_endpoint"] == "POST /api/query"
-    assert "premium_schema" in data
+    assert [p["id"] for p in data["plans"]] == ["free", "starter", "pro"]
+    assert data["metered_tools"] == ["open_image", "zoom"]
+    assert data["plans"][0]["monthly_limit"] == PLANS["free"].monthly_limit
+    assert data["plans"][1]["price_yearly_usd"] == 102  # $10 x 12 less 15%
+    assert "custom_skills" in data
 
 
 def test_billing_status_default(client):
@@ -25,60 +31,79 @@ def test_billing_status_default(client):
     assert r.status_code == 200
     data = r.json()
     assert data["plan"] == "free"
-    assert data["daily_limit"] == PLANS["free"].daily_limit
-    assert data["daily_used"] == 0
+    assert data["monthly_limit"] == PLANS["free"].monthly_limit
+    assert data["monthly_used"] == 0
+    assert data["monthly_remaining"] == PLANS["free"].monthly_limit
+    assert data["resets_at"].endswith("-01T00:00:00+00:00")
 
 
-def test_query_increments_usage(client, small_png_bytes, monkeypatch, byok_headers):
-    monkeypatch.setattr(
-        "server.run_query_stream",
-        lambda **_: iter([{"type": "assistant", "content": "ok"}]),
-    )
-    r = client.post(
-        "/api/query",
-        data={"query": "x"},
-        headers=byok_headers,
-    )
-    assert r.status_code == 200
-    status = client.get("/api/billing/status").json()
-    assert status["daily_used"] == 1
+def test_record_usage_counts_requests():
+    status = enforce_quota("u1")
+    after = record_usage("u1", status)
+    assert after["monthly_used"] == 1
+    assert after["monthly_remaining"] == PLANS["free"].monthly_limit - 1
+    assert user_billing_status("u1")["monthly_used"] == 1
 
 
-def test_query_quota_blocks(client, small_png_bytes, monkeypatch, byok_headers):
-    monkeypatch.setattr("zoomify.billing._check_rate_limit", lambda *_: None)
-    monkeypatch.setattr(
-        "server.run_query_stream",
-        lambda **_: iter([{"type": "assistant", "content": "ok"}]),
-    )
-    limit = PLANS["free"].daily_limit
-    for _ in range(limit):
-        r = client.post("/api/query", data={"query": "x"}, headers=byok_headers)
-        assert r.status_code == 200
-
-    r = client.post("/api/query", data={"query": "x"}, headers=byok_headers)
-    assert r.status_code == 429
+def test_monthly_quota_blocks():
+    increment_monthly_usage("u1", PLANS["free"].monthly_limit)
+    with pytest.raises(QuotaExceeded) as exc:
+        enforce_quota("u1")
+    assert exc.value.kind == "monthly"
+    assert "Monthly request limit reached" in str(exc.value)
 
 
-def test_starter_plan_higher_limit(client, monkeypatch, byok_headers):
-    monkeypatch.setattr("zoomify.billing._check_rate_limit", lambda *_: None)
-    monkeypatch.setattr(
-        "server.run_query_stream",
-        lambda **_: iter([{"type": "assistant", "content": "ok"}]),
-    )
-    upsert_user("dev-local", plan="starter", subscriptionStatus="active")
-    from zoomify.db import increment_daily_usage
+def test_paid_plan_has_higher_limit():
+    upsert_user("u1", plan="starter", subscriptionStatus="active")
+    increment_monthly_usage("u1", PLANS["free"].monthly_limit)
+    assert enforce_quota("u1")["plan"] == "starter"
 
-    for _ in range(PLANS["free"].daily_limit):
-        increment_daily_usage("dev-local")
 
-    r = client.post("/api/query", data={"query": "x"}, headers=byok_headers)
-    assert r.status_code == 200
+def test_canceled_subscription_falls_back_to_free():
+    upsert_user("u1", plan="pro", subscriptionStatus="canceled")
+    assert user_billing_status("u1")["plan"] == "free"
+
+
+def test_usage_is_tracked_per_period(monkeypatch):
+    from zoomify import db
+
+    monkeypatch.setattr(db, "current_period", lambda: "2026-01")
+    increment_monthly_usage("u1", 5)
+    assert user_billing_status("u1")["monthly_used"] == 5
+    monkeypatch.setattr(db, "current_period", lambda: "2026-02")
+    assert user_billing_status("u1")["monthly_used"] == 0
+    assert db.period_resets_at("2026-12") == "2027-01-01T00:00:00+00:00"
+
+
+def test_rate_limit_blocks_bursts(monkeypatch):
+    monkeypatch.setenv("RATE_LIMIT_FREE_PER_MINUTE", "2")
+    enforce_quota("u1")
+    enforce_quota("u1")
+    with pytest.raises(QuotaExceeded) as exc:
+        enforce_quota("u1")
+    assert exc.value.kind == "rate"
+    billing.reset_rate_limits()
+    enforce_quota("u1")
+
+
+def test_rate_limit_env_override(monkeypatch):
+    from zoomify.plans import rate_limit_per_minute
+
+    assert rate_limit_per_minute("free") == PLANS["free"].rate_limit_per_minute
+    assert rate_limit_per_minute("unknown") == PLANS["free"].rate_limit_per_minute
+    monkeypatch.setenv("RATE_LIMIT_PRO_PER_MINUTE", "60")
+    assert rate_limit_per_minute("pro") == 60
+    monkeypatch.setenv("RATE_LIMIT_PRO_PER_MINUTE", "not-a-number")
+    assert rate_limit_per_minute("pro") == PLANS["pro"].rate_limit_per_minute
 
 
 def test_openapi_docs(client):
     r = client.get("/api/openapi.json")
     assert r.status_code == 200
-    assert r.json()["info"]["title"] == "Zoomify API"
+    schema = r.json()
+    assert schema["info"]["title"] == "Zoomify API"
+    assert "/api/images" in schema["paths"]
+    assert "/api/query" not in schema["paths"]
 
 
 def test_mongodb_database_from_env(monkeypatch):
@@ -87,24 +112,6 @@ def test_mongodb_database_from_env(monkeypatch):
     assert mongodb_database_name() == DEFAULT_DB_NAME
     monkeypatch.setenv("MONGODB_DATABASE", "Zoomify-Prod")
     assert mongodb_database_name() == "Zoomify-Prod"
-
-
-def test_rate_limit_env_override(monkeypatch):
-    from zoomify.plans import (
-        DEFAULT_RATE_LIMIT_PRO_PER_MINUTE,
-        DEFAULT_RATE_LIMIT_STARTER_PER_MINUTE,
-        rate_limit_per_minute,
-    )
-
-    assert rate_limit_per_minute("free") == 10
-    assert rate_limit_per_minute("starter") == DEFAULT_RATE_LIMIT_STARTER_PER_MINUTE
-    assert rate_limit_per_minute("pro") == DEFAULT_RATE_LIMIT_PRO_PER_MINUTE
-
-    monkeypatch.setenv("RATE_LIMIT_PRO_PER_MINUTE", "60")
-    assert rate_limit_per_minute("pro") == 60
-
-    monkeypatch.setenv("RATE_LIMIT_PRO_PER_MINUTE", "not-a-number")
-    assert rate_limit_per_minute("pro") == DEFAULT_RATE_LIMIT_PRO_PER_MINUTE
 
 
 def test_stripe_webhook_checkout(client):
@@ -126,3 +133,32 @@ def test_stripe_webhook_checkout(client):
     user = get_user("user_test123")
     assert user["plan"] == "pro"
     assert user["subscriptionStatus"] == "active"
+
+
+def test_stripe_subscription_events_resolve_user_by_customer(client):
+    """Payment Link subscriptions carry no user metadata — match on the customer id."""
+    client.post(
+        "/api/billing/webhook",
+        json={
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "client_reference_id": "user_c",
+                    "subscription": "sub_c",
+                    "customer": "cus_c",
+                    "metadata": {"plan": "starter"},
+                }
+            },
+        },
+    )
+    assert user_billing_status("user_c")["plan"] == "starter"
+
+    r = client.post(
+        "/api/billing/webhook",
+        json={
+            "type": "customer.subscription.deleted",
+            "data": {"object": {"id": "sub_c", "customer": "cus_c", "status": "canceled"}},
+        },
+    )
+    assert r.status_code == 200
+    assert user_billing_status("user_c")["plan"] == "free"

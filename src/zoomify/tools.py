@@ -1,25 +1,23 @@
 """
-tools.py — agent tool layer (stack-based zoom path).
+tools.py — zoom tool layer (stack-based zoom path).
 
-Holds the stateful :class:`ImageState`: the upload is auto-gridded at the root,
-and each ``zoom`` **pushes** a recipe step onto a stack. ``undo`` pops the last
-step; ``restore`` clears the stack. The current gridded view is rendered from
-``original + path`` on demand (no branching node DAG or stored intermediates).
+Holds the stateful :class:`ImageState`: the opened image is auto-gridded at the
+root, and each ``zoom`` **pushes** a recipe step onto a stack. ``undo`` pops the
+last step; ``restore`` clears the stack. The current gridded view is rendered
+from ``original + path`` on demand (no branching node DAG or stored
+intermediates).
 
-Tools (OpenAI function-calling):
+Tools (exposed to agents over MCP by :mod:`zoomify.mcp_server`):
 - zoom    : push a crop/upscale/re-grid step onto the path.
 - undo    : pop the last zoom step.
 - redo    : re-push the step last popped by ``undo``.
 - restore : clear the path back to the root view.
 
-Each tool returns a text status (for the ``tool`` role message) and the now
-current image (for a follow-up multimodal ``user`` message so the vision model
-can actually see it).
+Each tool returns a text status plus the now-current gridded image.
 """
 
 from __future__ import annotations
 
-import base64
 import io
 from dataclasses import dataclass, field
 
@@ -29,11 +27,28 @@ from . import gridder, gridzoom
 from .gridder import GridMeta
 
 
-def _estimate_regrid_cols(state: "ImageState", select: str, zoom: float) -> int:
-    """Pick re-grid columns from the post-zoom crop size and parent cell width."""
+# Upper bound on the pixel count of one zoomed view. A large selection times a
+# large factor would otherwise allocate gigabytes; the factor is lowered to fit.
+MAX_ZOOMED_PIXELS = 36_000_000
+
+
+def _crop_bbox(state: "ImageState", select: str) -> tuple[int, int, int, int]:
     cw, ch = state.content.size
     bbox, _ = gridzoom.selection_bbox(state.meta, select, cw, ch)
-    x0, y0, x1, y1 = bbox
+    return bbox
+
+
+def _fit_zoom(state: "ImageState", select: str, zoom: float) -> float:
+    """Lower ``zoom`` (never below 1) so the zoomed crop stays within budget."""
+    x0, y0, x1, y1 = _crop_bbox(state, select)
+    area = max(1, (x1 - x0) * (y1 - y0))
+    max_zoom = (MAX_ZOOMED_PIXELS / area) ** 0.5
+    return max(1.0, min(zoom, max_zoom))
+
+
+def _estimate_regrid_cols(state: "ImageState", select: str, zoom: float) -> int:
+    """Pick re-grid columns from the post-zoom crop size and parent cell width."""
+    x0, y0, x1, y1 = _crop_bbox(state, select)
     nw = max(1, int(round((x1 - x0) * zoom)))
     nh = max(1, int(round((y1 - y0) * zoom)))
     return gridder.auto_grid_cols(nw, nh, parent_cell_w=state.meta.cell_w)
@@ -134,7 +149,7 @@ class ImageState:
         return gridded
 
     def reset_to_root(self) -> None:
-        """Clear the zoom stack (called at the start of each new user query)."""
+        """Clear the zoom stack."""
         self.path.clear()
         self._redo = None
         self._invalidate()
@@ -143,103 +158,27 @@ class ImageState:
 # --------------------------------------------------------------- encoding
 
 
-def encode_image(img: Image.Image, max_side: int = 1536, fmt: str = "PNG") -> str:
-    """Return a base64 data URI, downscaled for transport / thumbnails."""
+def encode_view(
+    img: Image.Image, max_side: int = 1568, max_png_bytes: int = 900_000
+) -> tuple[bytes, str]:
+    """Encode a gridded view for an MCP image result: ``(data, format)``.
+
+    Views are downscaled to ``max_side`` (what vision models actually ingest).
+    PNG keeps line art and small text crisp; photographic views that would be
+    too heavy as PNG fall back to JPEG.
+    """
     work = img.convert("RGB")
     w, h = work.size
     scale = max(w, h) / max_side
     if scale > 1:
         work = work.resize((max(1, int(w / scale)), max(1, int(h / scale))), Image.LANCZOS)
     buf = io.BytesIO()
-    work.save(buf, format=fmt)
-    mime = "jpeg" if fmt.upper() in ("JPG", "JPEG") else fmt.lower()
-    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-    return f"data:image/{mime};base64,{b64}"
-
-
-# --------------------------------------------------------------- schemas
-
-TOOLS_SCHEMA = [
-    {
-        "type": "function",
-        "function": {
-            "name": "zoom",
-            "description": (
-                "Crop a cell selection from the CURRENT gridded image, upscale "
-                "it, and re-overlay a fresh labeled grid so you can read small "
-                "fonts and drill deeper. The selection refers to the column "
-                "letters (A, B, ...) and row numbers (1, 2, ...) on the current "
-                "image. This pushes a new step onto the zoom stack; use `undo` "
-                "to pop back if you picked the wrong region."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "select": {
-                        "type": "string",
-                        "description": (
-                            "Cells/regions to zoom into, referencing the current "
-                            "grid labels. Examples: '2C' or 'C2' (one cell), "
-                            "'1C,3B,4C' (discrete cells), '1-3-B-E' (rectangle "
-                            "rows 1-3 x cols B-E), '1-2-A-F, 3-5-G-J' (multiple "
-                            "regions). The crop is the union bounding box."
-                        ),
-                    },
-                    "zoom": {
-                        "type": "number",
-                        "minimum": 1,
-                        "maximum": 8,
-                        "description": "Upscale factor for the crop (default 3). "
-                        "Use higher (4-6) for tiny fonts.",
-                    },
-                    "regrid_cols": {
-                        "type": "integer",
-                        "minimum": 2,
-                        "maximum": 30,
-                        "description": "Columns for the fresh grid on the zoomed "
-                        "crop. Omit to auto-pick from crop size "
-                        "(~120px cells, similar to the parent view).",
-                    },
-                },
-                "required": ["select"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "undo",
-            "description": (
-                "Pop the last zoom step and return to the previous view. Use "
-                "when your latest zoom targeted the wrong cells — you can "
-                "immediately try a different `select` from that parent view."
-            ),
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "redo",
-            "description": (
-                "Re-push the zoom step you most recently popped with `undo`. "
-                "Use only if you undid by mistake and want that zoom back "
-                "without re-entering the selection."
-            ),
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "restore",
-            "description": (
-                "Clear the zoom stack and return to the ROOT (full auto-gridded image)."
-            ),
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-]
+    work.save(buf, format="PNG", optimize=True)
+    if buf.tell() <= max_png_bytes:
+        return buf.getvalue(), "png"
+    buf = io.BytesIO()
+    work.save(buf, format="JPEG", quality=88)
+    return buf.getvalue(), "jpeg"
 
 
 # --------------------------------------------------------------- dispatch
@@ -271,6 +210,9 @@ def run_tool(name: str, args: dict, state: ImageState) -> ToolResult:
         except ValueError as e:
             return ToolResult(text=f"zoom error: {e}")
 
+        requested = zoom
+        zoom = round(_fit_zoom(state, select, zoom), 2)
+
         raw_cols = args.get("regrid_cols")
         if raw_cols is None or raw_cols == "":
             regrid_cols = _estimate_regrid_cols(state, select, zoom)
@@ -283,8 +225,14 @@ def run_tool(name: str, args: dict, state: ImageState) -> ToolResult:
         state._invalidate()
         state._ensure_rendered()
 
+        note = (
+            f" (lowered from {requested:g}x — the selection is large; pick fewer cells "
+            "to magnify further)"
+            if zoom < requested
+            else ""
+        )
         msg = (
-            f"Zoomed selection {select!r} by {zoom:g}x (stack depth {state.depth}). "
+            f"Zoomed selection {select!r} by {zoom:g}x{note} (stack depth {state.depth}). "
             f"Pushed '{step.label}'. `zoom` again to go deeper, or `undo` to step back. "
             f"{_pos(state)} Image shown next."
         )

@@ -1,8 +1,7 @@
-"""Zoomify — a Gradio AI agent that extracts information from any hard-to-read
-image (high-resolution, very large/long, dense, or tiny-font — maps, diagrams,
-screenshots, scans, dashboards) using grid + zoom tools driven by an OpenAI
-vision model."""
+"""Zoomify — grid + zoom vision tools for AI agents, served as a remote MCP
+server. Lets any agent read hard-to-read images (high-resolution, very
+large/long, dense, or tiny-font — drawings, maps, scans, screenshots, PDFs)."""
 
-from . import agent, gridder, gridzoom, tools
+from . import gridder, gridzoom, tools
 
-__all__ = ["agent", "gridder", "gridzoom", "tools"]
+__all__ = ["gridder", "gridzoom", "tools"]

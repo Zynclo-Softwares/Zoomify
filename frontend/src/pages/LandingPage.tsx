@@ -6,34 +6,34 @@ import "./LandingPage.css";
 
 const FEATURES: { icon: IconName; title: string; desc: string }[] = [
 	{
-		icon: "vision",
-		title: "Vision extraction",
-		desc: "Upload maps, scans, or diagrams — AI reads what models miss at full-frame scale.",
+		icon: "tree",
+		title: "Works with any agent",
+		desc: "A standard remote MCP server — Claude Code, Cursor, VS Code, Codex, Gemini CLI, and more.",
 	},
 	{
 		icon: "grid",
-		title: "Smart zoom grid",
-		desc: "Auto-grids images and zooms into tiny text, labels, and dense regions.",
+		title: "Grid and zoom tools",
+		desc: "Your agent names a cell, the server crops, upscales, and re-grids it until small print is sharp.",
 	},
 	{
-		icon: "tree",
-		title: "Live zoom tree",
-		desc: "Follow every zoom step in a breadcrumb trail with thumbnail previews.",
-	},
-	{
-		icon: "json",
-		title: "Structured JSON",
-		desc: "Metadata-tagged images auto-route to business schemas for typed output.",
-	},
-	{
-		icon: "undo",
-		title: "Undo & redo",
-		desc: "Agent navigates, backtracks, and refines — just like a human inspector.",
+		icon: "vision",
+		title: "Drawings, scans, PDFs",
+		desc: "Single-line diagrams, site plans, long screenshots, and PDF pages too big to read in one look.",
 	},
 	{
 		icon: "schema",
-		title: "Custom schemas",
-		desc: "Zynclo designs extraction schemas tailored to your documents.",
+		title: "Built-in skills",
+		desc: "Playbooks served with the tools teach your agent how to read each kind of document.",
+	},
+	{
+		icon: "undo",
+		title: "Undo, redo, restore",
+		desc: "Navigation is free, so agents can back out of a wrong zoom and try again.",
+	},
+	{
+		icon: "json",
+		title: "Free to start",
+		desc: "1,000 requests a month at no cost. Open source, so you can also host it yourself.",
 	},
 ];
 
@@ -56,25 +56,41 @@ export default function LandingPage() {
 					>
 						API
 					</a>
+					<a
+						href="https://github.com/Zynclo-Softwares/Zoomify"
+						className="landing-link"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						GitHub
+					</a>
 				</div>
 			</LandingNav>
 
 			<main className="landing-hero">
 				<ZoomifyLogo size={88} className="landing-logo" decorative />
 				<p className="landing-kicker">by Zynclo</p>
-				<h1>Extract detail from any complex image</h1>
+				<h1>Give your AI agent a zoom lens</h1>
 				<p className="landing-lead">
-					Zoomify grids hard-to-read maps, diagrams, scans, and tiny text — then
-					zooms with AI until every field is captured accurately.
+					Vision models skim large images and guess at the small print. Zoomify
+					is a cloud MCP server that lets any agent grid, zoom, and re-read
+					drawings, scans, and PDFs until every value is legible.
 				</p>
 				<div className="landing-cta">
 					<Link to="/sign-up" className="landing-btn landing-btn-lg">
-						Start free
+						Get a free API key
 					</Link>
-					<Link to="/product" className="landing-btn ghost landing-btn-lg">
-						Open product
+					<Link to="/connect" className="landing-btn ghost landing-btn-lg">
+						Connect an agent
 					</Link>
 				</div>
+				<pre className="landing-snippet">
+					<code>
+						{"claude mcp add --transport http zoomify "}
+						{window.location.origin}
+						{'/mcp \\\n  --header "Authorization: Bearer zfy_live_…"'}
+					</code>
+				</pre>
 				<div className="landing-features">
 					{FEATURES.map((f) => (
 						<article key={f.title} className="feature-card">

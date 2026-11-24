@@ -7,7 +7,7 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from zoomify.db import upsert_user
+from zoomify.db import find_user_id_by_stripe_customer, upsert_user
 
 # Map Stripe Payment Link metadata or price lookup keys to plan ids.
 PLAN_FROM_METADATA = {
@@ -75,7 +75,13 @@ def handle_event(event: dict[str, Any]) -> dict[str, str]:
 
 def _clerk_id_from_obj(obj: dict[str, Any]) -> str | None:
     meta = obj.get("metadata") or {}
-    return meta.get("clerk_user_id") or meta.get("clerkUserId")
+    clerk_id = meta.get("clerk_user_id") or meta.get("clerkUserId")
+    if clerk_id:
+        return clerk_id
+    # Payment Link subscriptions carry no user metadata — fall back to the
+    # customer id recorded at checkout.
+    customer = obj.get("customer")
+    return find_user_id_by_stripe_customer(customer if isinstance(customer, str) else None)
 
 
 def _on_checkout_completed(session: dict[str, Any]) -> dict[str, str]:

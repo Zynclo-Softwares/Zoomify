@@ -9,7 +9,7 @@ export default function SignUpPage() {
 				routing="path"
 				path="/sign-up"
 				signInUrl="/sign-in"
-				forceRedirectUrl="/product"
+				forceRedirectUrl="/connect"
 				appearance={clerkAppearance}
 			/>
 		</AuthShell>
