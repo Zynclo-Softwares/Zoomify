@@ -139,4 +139,4 @@ export function uploadCurl(uploadUrl: string, key: string): string {
 }
 
 export const EXAMPLE_PROMPT =
-	"Use Zoomify to open https://example.com/site-plan.png. Read the zoom-basics skill first, then list every label in the legend and the sheet number from the title block. Zoom until each value is sharp and tell me where you read it.";
+	"Use Zoomify to open ./site-plan.png (a local path or a public link both work). Read the zoom-basics skill first, then list every label in the legend and the sheet number from the title block. Zoom until each value is sharp and tell me where you read it.";

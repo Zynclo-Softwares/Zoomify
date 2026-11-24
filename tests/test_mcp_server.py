@@ -354,3 +354,75 @@ def test_http_usage_is_attributed_to_the_key_owner(live_client, small_png_bytes,
     assert r.json()["result"].get("isError") in (None, False)
     assert user_billing_status("user_meter")["monthly_used"] == 1
     assert user_billing_status(USER)["monthly_used"] == 0
+
+
+# --------------------------------------------------------------- local files without a key
+
+
+def test_request_upload_then_open(server, client, small_png_bytes):
+    ticket = call(server, "request_upload", {"file_path": "/tmp/My Plan.png"}).structured_content
+    assert ticket["image_id"].startswith("img_")
+    assert "/api/uploads/upl_" in ticket["upload_url"]
+    assert ticket["curl"].startswith("curl -sS -T '/tmp/My Plan.png' ")
+    assert "zfy_live_" not in str(ticket)
+
+    path = ticket["upload_url"].split("://", 1)[1].split("/", 1)[1]
+    r = client.put("/" + path, content=small_png_bytes)
+    assert r.status_code == 200, r.text
+    assert r.json()["image_id"] == ticket["image_id"]
+    assert r.json()["filename"] == "My Plan.png"
+
+    text = text_of(call(server, "open_image", {"image_id": ticket["image_id"]}))
+    assert "My Plan.png" in text and "session_id" in text
+
+
+def test_upload_link_is_single_use_and_needs_no_key(server, client, small_png_bytes, monkeypatch):
+    ticket = call(server, "request_upload", {}).structured_content
+    path = "/" + ticket["upload_url"].split("://", 1)[1].split("/", 1)[1]
+    # Sign-in on: the link still works without any Authorization header.
+    monkeypatch.setenv("CLERK_JWKS_URL", "https://clerk.example/.well-known/jwks.json")
+    files = {"file": ("plan.png", small_png_bytes, "image/png")}
+    assert client.post(path, files=files).status_code == 200
+    assert client.post(path, files=files).status_code == 404
+    assert client.put("/api/uploads/upl_guess", content=small_png_bytes).status_code == 404
+
+
+def test_upload_link_rejects_bad_files_but_can_be_retried(server, client, small_png_bytes):
+    ticket = call(server, "request_upload", {}).structured_content
+    path = "/" + ticket["upload_url"].split("://", 1)[1].split("/", 1)[1]
+    assert client.put(path, content=b"not an image").status_code == 422
+    assert client.put(path, content=b"").status_code == 422
+    assert client.put(path, content=small_png_bytes).status_code == 200
+
+
+def test_upload_link_enforces_plan_size(server, client, small_png_bytes, monkeypatch):
+    from zoomify import images
+
+    ticket = images.uploads.issue_ticket(USER, max_bytes=10)
+    r = client.put(f"/api/uploads/{ticket.token}", content=small_png_bytes)
+    assert r.status_code == 413
+    assert images.uploads.get(USER, ticket.image_id) is None
+
+
+def test_upload_tickets_expire(monkeypatch):
+    from zoomify import images
+
+    s = images.UploadStore()
+    ticket = s.issue_ticket("u1", 100)
+    assert s.peek_ticket(ticket.token) is ticket
+    real = images.time.time()
+    monkeypatch.setattr(images.time, "time", lambda: real + images.UPLOAD_TICKET_TTL_SECONDS + 1)
+    assert s.redeem_ticket(ticket.token) is None
+
+
+def test_open_image_inline_base64(server, small_png_bytes):
+    import base64
+
+    b64 = base64.b64encode(small_png_bytes).decode()
+    assert "session_id" in text_of(call(server, "open_image", {"image_base64": b64}))
+    data_url = "data:image/png;base64," + b64
+    assert "session_id" in text_of(call(server, "open_image", {"image_base64": data_url}))
+    with pytest.raises(ToolError, match="request_upload"):
+        call(server, "open_image", {"image_base64": "/Users/me/plan.png"})
+    with pytest.raises(ToolError, match="exactly one"):
+        call(server, "open_image", {"image_base64": b64, "image_url": "https://x.test/a.png"})

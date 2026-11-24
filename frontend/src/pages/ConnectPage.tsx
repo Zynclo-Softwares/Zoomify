@@ -401,8 +401,13 @@ function UploadCard({
 				</p>
 				<h3>Local or private file</h3>
 				<p className="connect-muted">
-					Upload it first, then pass the returned <code>image_id</code>. Agents
-					with a shell can do this themselves:
+					Just give the agent the file path. It calls{" "}
+					<code>request_upload</code>, gets a one-time upload link, sends the
+					file from disk, and opens it. The link needs no API key, so the agent
+					never touches yours.
+				</p>
+				<p className="connect-muted">
+					To upload by hand instead, drop the file here or use your key:
 				</p>
 				<CodeBlock
 					caption="Terminal"
@@ -634,7 +639,7 @@ function ConnectDashboard({ signOut }: { signOut?: ReactNode }) {
 							index={3}
 							icon={<Upload size={16} />}
 							title="Give it an image"
-							lead="The server runs in the cloud, so it needs a URL or an upload — it cannot read files on your machine."
+							lead="The server runs in the cloud and cannot read files on your machine. Agents upload local files themselves through a one-time link."
 						>
 							<UploadCard uploadUrl={uploadUrl} keyForSnippets={snippetKey} />
 						</Step>

@@ -24,6 +24,25 @@ magnify the parts that matter.
 5. **Navigate**: `undo` to step back one level, `restore` to return to the full
    image, then zoom somewhere else. Repeat until the question is answered.
 
+## Getting the image in
+
+The server runs in the cloud and cannot read files on the user's machine. Pick
+the source that matches what you were given:
+
+| You have | Do this |
+|---|---|
+| A public `https://` link | `open_image(image_url=…)` |
+| A file on disk | `request_upload(file_path=…)`, run the `curl` command it returns in your shell, then `open_image(image_id=…)` |
+| An `image_id` (`img_…`) | `open_image(image_id=…)` |
+| A small image already in memory and no shell | `open_image(image_base64=…)` |
+
+The upload link from `request_upload` needs no API key, works once, and expires
+in 15 minutes. Never search for, read, or ask for the user's Zoomify API key,
+and do not paste a file's base64 into a tool call when you can upload it from
+disk instead: the upload costs no tokens. If you have neither a shell nor the
+image bytes, ask the user for a public link or to upload the file on the
+Zoomify Connect page and give you the `image_id`.
+
 ## Selecting cells
 
 | You want | Write | Meaning |

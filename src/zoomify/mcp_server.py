@@ -7,7 +7,8 @@ Built on the official MCP Python SDK and served over Streamable HTTP at
 Tools
 -----
 Metered (one *request* each): ``open_image``, ``zoom``
-Free: ``undo``, ``redo``, ``restore``, ``view``, ``usage``, ``read_skill``
+Free: ``request_upload``, ``undo``, ``redo``, ``restore``, ``view``, ``usage``,
+``read_skill``
 
 Extending
 ---------
@@ -20,7 +21,10 @@ Extending
 
 from __future__ import annotations
 
+import base64
+import binascii
 import os
+import shlex
 from typing import Annotated, Any
 
 import anyio
@@ -31,7 +35,7 @@ from pydantic import Field
 
 from .billing import QuotaExceeded, enforce_quota, record_usage
 from .db import user_billing_status
-from .images import ImageError, fetch_url, load_image, uploads
+from .images import UPLOAD_TICKET_TTL_SECONDS, ImageError, fetch_url, load_image, uploads
 from .plans import plan_for_id
 from .platform_keys import is_platform_key, lookup_clerk_user_by_platform_key
 from .session import ZoomSession, store
@@ -42,6 +46,8 @@ SERVER_NAME = "zoomify"
 SERVER_VERSION = "1.0.0"
 DEV_USER_ID = "dev-local"
 USER_STATE_KEY = "zoomify_user"
+BASE_URL_STATE_KEY = "zoomify_base_url"
+UPLOAD_PATH = "/api/uploads"
 
 INSTRUCTIONS = """\
 Zoomify lets you read images that are too large, dense, or fine-printed to read \
@@ -51,6 +57,10 @@ scans, long screenshots, and PDF pages.
 Workflow:
 1. open_image(image_url=… or image_id=…) → session_id + the full image with a \
 labeled grid (columns A, B, …; rows 1, 2, …).
+   The server cannot read files on the user's machine. For a local file, call \
+request_upload first: it returns a one-time upload_url and the exact curl \
+command to run in your shell, plus the image_id to pass to open_image. The \
+upload_url needs no API key, so never look for, read, or ask for the user's key.
 2. zoom(session_id, select) on the cells that hold what you need, e.g. "C2" \
 (one cell) or "1-3-B-E" (rows 1-3, columns B-E). The crop is upscaled and \
 re-gridded so you can zoom again.
@@ -144,6 +154,54 @@ def _user_id(ctx: Context) -> str:
 # --------------------------------------------------------------- helpers
 
 
+def public_base_url(request: Any = None) -> str:
+    """Origin clients should use to reach this server (no trailing slash)."""
+    configured = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if configured:
+        return configured
+    if request is not None:
+        state = getattr(request, "scope", {}).get("state") or {}
+        if state.get(BASE_URL_STATE_KEY):
+            return str(state[BASE_URL_STATE_KEY]).rstrip("/")
+        base = getattr(request, "base_url", None)
+        if base:
+            return str(base).rstrip("/")
+    return "http://127.0.0.1:8000"
+
+
+def _base_url(ctx: Context) -> str:
+    try:
+        request = ctx.request_context.request
+    except Exception:
+        request = None
+    return public_base_url(request)
+
+
+def _decode_inline(value: str, max_bytes: int) -> bytes:
+    """Decode ``image_base64`` (raw base64 or a ``data:`` URL)."""
+    text = value.strip()
+    if text.startswith("data:"):
+        head, sep, text = text.partition(",")
+        if not sep or ";base64" not in head:
+            raise ImageError("image_base64 data URLs must be base64-encoded.")
+    text = "".join(text.split())
+    if len(text) * 3 // 4 > max_bytes + 3:
+        raise ImageError(
+            f"The inline image is larger than this plan's {max_bytes // (1024 * 1024)} MB "
+            "limit. Use request_upload instead."
+        )
+    try:
+        data = base64.b64decode(text + "=" * (-len(text) % 4), validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ImageError(
+            "image_base64 is not valid base64. For a file on disk, call request_upload "
+            "and upload it with the curl command it returns."
+        ) from exc
+    if not data:
+        raise ImageError("image_base64 is empty.")
+    return data
+
+
 def _meter(user_id: str) -> dict | None:
     """Check plan limits before a metered tool runs (raises ``ToolError`` if blocked)."""
     if quotas_disabled():
@@ -229,8 +287,19 @@ def build_mcp() -> MCPServer:
             str | None,
             Field(
                 description=(
-                    "Id of a file uploaded with POST /api/images (use this for local or "
-                    "private files), e.g. 'img_…'."
+                    "Id of an uploaded file, e.g. 'img_…'. For a local or private file, "
+                    "call request_upload, run the curl command it returns, then pass the "
+                    "image_id here."
+                )
+            ),
+        ] = None,
+        image_base64: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "The image or PDF itself as base64 (or a data: URL). Only for small "
+                    "files you already hold in memory, such as a screenshot; for files on "
+                    "disk use request_upload, which costs no tokens."
                 )
             ),
         ] = None,
@@ -249,16 +318,21 @@ def build_mcp() -> MCPServer:
         """Open an image or PDF page and start a zoom session.
 
         Returns a `session_id` and the full image with a labeled grid overlaid
-        (columns A, B, …; rows 1, 2, …). Pass exactly one of `image_url` or
-        `image_id`. Supports PNG, JPEG, WebP, TIFF, GIF, BMP, and PDF (one page
-        per session). Then call `zoom` with cells from the grid to read detail.
-        Counts as one request.
+        (columns A, B, …; rows 1, 2, …). Pass exactly one of `image_url`,
+        `image_id`, or `image_base64`. For a file on the user's machine, call
+        `request_upload` first. Supports PNG, JPEG, WebP, TIFF, GIF, BMP, and
+        PDF (one page per session). Then call `zoom` with cells from the grid to
+        read detail. Counts as one request.
         """
         user_id = _user_id(ctx)
         url = (image_url or "").strip()
         upload_id = (image_id or "").strip()
-        if bool(url) == bool(upload_id):
-            raise ToolError("Pass exactly one of image_url or image_id.")
+        inline = (image_base64 or "").strip()
+        if sum(map(bool, (url, upload_id, inline))) != 1:
+            raise ToolError(
+                "Pass exactly one of image_url, image_id, or image_base64. For a local "
+                "file, call request_upload first."
+            )
 
         status = _meter(user_id)
         plan = plan_for_id(status["plan"] if status else "pro")
@@ -269,10 +343,13 @@ def build_mcp() -> MCPServer:
                 upload = uploads.get(user_id, upload_id)
                 if upload is None:
                     raise ImageError(
-                        f"Unknown or expired image_id {upload_id!r}. Uploads are kept for one "
-                        "hour — upload the file again with POST /api/images."
+                        f"Unknown or expired image_id {upload_id!r}. Nothing has been uploaded "
+                        "under that id, or it is more than an hour old. Call request_upload "
+                        "and run the curl command it returns, then try again."
                     )
                 data, label = upload.data, upload.filename or upload_id
+            elif inline:
+                data, label = _decode_inline(inline, max_bytes), "inline image"
             else:
                 data, label = fetch_url(url, max_bytes), url.rsplit("/", 1)[-1][:80] or url
             loaded = load_image(data, page=page)
@@ -425,6 +502,56 @@ def build_mcp() -> MCPServer:
         text, image = await anyio.to_thread.run_sync(work)
         return [text, image]
 
+    # ---- uploads --------------------------------------------------------
+
+    @server.tool(
+        title="Request an upload link",
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=False,
+            open_world_hint=False,
+        ),
+    )
+    async def request_upload(
+        ctx: Context,
+        file_path: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Path of the local file you intend to upload. Optional; it is only "
+                    "used to fill in the returned curl command."
+                )
+            ),
+        ] = None,
+    ) -> dict[str, Any]:
+        """Get a one-time link for uploading a local image or PDF, with no API key.
+
+        Use this whenever the image is a file on the user's machine. Run the
+        returned `curl` command in your shell (it sends the file straight from
+        disk, so the file never passes through your context), then call
+        `open_image(image_id=…)` with the returned `image_id`. The link works
+        once, for one file, and expires in 15 minutes. Do not read or ask for
+        the user's API key. Free.
+        """
+        user_id = _user_id(ctx)
+        status = await anyio.to_thread.run_sync(user_billing_status, user_id)
+        plan = plan_for_id(status["plan"])
+        path = (file_path or "").strip()
+        name = path.replace("\\", "/").rsplit("/", 1)[-1][:200]
+        ticket = uploads.issue_ticket(user_id, plan.max_image_mb * 1024 * 1024, filename=name)
+        upload_url = f"{_base_url(ctx)}{UPLOAD_PATH}/{ticket.token}"
+        path = path or "/path/to/file"
+        return {
+            "image_id": ticket.image_id,
+            "upload_url": upload_url,
+            "curl": f"curl -sS -T {shlex.quote(path)} {shlex.quote(upload_url)}",
+            "method": "PUT (raw file body) or POST (multipart field 'file')",
+            "max_mb": plan.max_image_mb,
+            "expires_in_seconds": UPLOAD_TICKET_TTL_SECONDS,
+            "next": f"After the upload succeeds, call open_image(image_id='{ticket.image_id}').",
+        }
+
     # ---- account & guidance -------------------------------------------
 
     @server.tool(title="Plan & usage", annotations=_READ_ONLY)
@@ -488,13 +615,22 @@ def build_mcp() -> MCPServer:
         description="Start a careful, zoom-first extraction from an image or PDF.",
     )
     def inspect_image(image: str, task: str = "Extract the key information.") -> str:
-        """`image` is a URL or an uploaded image_id; `task` is what to find."""
+        """`image` is a URL, an image_id, or a local file path; `task` is what to find."""
         core = get_skill(CORE_SKILL)
         guide = core.body if core else ""
-        source = "image_id" if image.strip().startswith("img_") else "image_url"
+        ref = image.strip()
+        if ref.startswith("img_"):
+            how = f"Image (image_id): {ref}"
+        elif ref.lower().startswith(("http://", "https://")):
+            how = f"Image (image_url): {ref}"
+        else:
+            how = (
+                f"Image (local file): {ref}\nCall request_upload with that path, run the "
+                "curl command it returns, then open the returned image_id."
+            )
         return (
             f"{guide}\n\n---\n\nUse the Zoomify tools to complete this task.\n\n"
-            f"Image ({source}): {image.strip()}\nTask: {task.strip()}\n\n"
+            f"{how}\nTask: {task.strip()}\n\n"
             "Open the image, zoom until every value you report is sharp, and cite the "
             "region each value came from."
         )
@@ -519,6 +655,11 @@ def tools_catalog() -> list[dict[str, Any]]:
         {"name": "redo", "metered": False, "summary": "Re-apply the zoom step you just undid."},
         {"name": "restore", "metered": False, "summary": "Return to the full gridded image."},
         {"name": "view", "metered": False, "summary": "Show the current view again."},
+        {
+            "name": "request_upload",
+            "metered": False,
+            "summary": "One-time upload link so an agent can send a local file without the key.",
+        },
         {
             "name": "usage",
             "metered": False,

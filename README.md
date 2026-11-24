@@ -76,13 +76,25 @@ The server runs in the cloud, so it cannot read files on your machine.
 | Source | How |
 |--------|-----|
 | Public URL | `open_image(image_url="https://…")` — the server downloads it |
-| Local / private file | Upload first, then `open_image(image_id="img_…")` |
+| Local / private file | The agent calls `request_upload`, runs the `curl` command it gets back, then `open_image(image_id="img_…")` |
+| Small image already in memory | `open_image(image_base64="…")` |
+
+**Agents never need your API key to upload.** `request_upload` returns a
+one-time link that is tied to your account, accepts a single file, and expires
+after 15 minutes:
+
+```bash
+# what the agent runs, straight from disk, with no key and no tokens spent
+curl -sS -T ./drawing.pdf https://<host>/api/uploads/upl_…
+# → {"image_id": "img_…", "kind": "pdf", "pages": 4, ...}
+```
+
+You can also upload by hand, from the Connect page or with your key:
 
 ```bash
 curl -s https://<host>/api/images \
   -H "Authorization: Bearer $ZOOMIFY_API_KEY" \
   -F "file=@drawing.pdf"
-# → {"image_id": "img_…", "kind": "pdf", "pages": 4, ...}
 ```
 
 Uploads are private to your account, kept in memory, and expire after an hour.
@@ -94,6 +106,7 @@ PNG, JPEG, WebP, TIFF, GIF, BMP, and PDF (one page per session) are supported.
 |------|------|--------------|
 | `open_image` | 1 request | Opens an image or PDF page; returns a `session_id` and the full image with a labeled grid (columns `A…`, rows `1…`). |
 | `zoom` | 1 request | Crops a selection (`C2`, `1-3-B-E`, `1C,3B`), upscales it, re-grids it, and **pushes** a step onto the session's zoom stack. |
+| `request_upload` | free | Returns a one-time upload link and `curl` command so the agent can send a local file without the API key. |
 | `undo` | free | **Pops** the last zoom step. |
 | `redo` | free | Re-pushes the step last popped by `undo`. |
 | `restore` | free | Clears the stack back to the full gridded image. |
@@ -271,6 +284,7 @@ The MCP endpoint is `/mcp`. The REST API around it (interactive docs at
 | `GET` | `/api/mcp/info` | — | Endpoint URL, auth scheme, tools, skills |
 | `GET` | `/api/skills`, `/api/skills/{name}.md` | — | Skills as JSON / Markdown |
 | `POST` | `/api/images` | key | Upload an image or PDF → `image_id` |
+| `PUT`, `POST` | `/api/uploads/{token}` | one-time link | Upload with a link from `request_upload` |
 | `GET` | `/api/auth/me` | key | Who am I |
 | `GET` | `/api/platform-key` | key | Key status (prefix only) |
 | `POST` | `/api/platform-key` | Clerk JWT | Create the API key (returned once) |
