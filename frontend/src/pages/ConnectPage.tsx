@@ -2,10 +2,13 @@ import { SignOutButton, useAuth } from "@clerk/react";
 import {
 	BookOpen,
 	Check,
+	ChevronRight,
 	Copy,
 	Eye,
 	EyeOff,
+	FolderOpen,
 	KeyRound,
+	Link2,
 	LogOut,
 	Plug,
 	RefreshCw,
@@ -360,7 +363,7 @@ function UsageCard({ status }: { status: BillingStatus | null }) {
 	);
 }
 
-function UploadCard({
+function ManualUpload({
 	uploadUrl,
 	keyForSnippets,
 }: {
@@ -392,30 +395,12 @@ function UploadCard({
 	};
 
 	return (
-		<div className="upload-grid">
-			<div>
-				<h3>Public file</h3>
-				<p className="connect-muted">
-					Give the agent the link. It calls <code>open_image(image_url=…)</code>{" "}
-					and the server downloads it.
-				</p>
-				<h3>Local or private file</h3>
-				<p className="connect-muted">
-					Just give the agent the file path. It calls{" "}
-					<code>request_upload</code>, gets a one-time upload link, sends the
-					file from disk, and opens it. The link needs no API key, so the agent
-					never touches yours.
-				</p>
-				<p className="connect-muted">
-					To upload by hand instead, drop the file here or use your key:
-				</p>
-				<CodeBlock
-					caption="Terminal"
-					code={uploadCurl(uploadUrl, keyForSnippets)}
-				/>
-			</div>
-			<div>
-				<h3>Or upload here</h3>
+		<details className="manual-upload">
+			<summary>
+				<ChevronRight size={14} aria-hidden="true" />
+				Upload a file yourself instead
+			</summary>
+			<div className="manual-upload-body">
 				<label
 					className={`dropzone${dragging ? " dragging" : ""}${busy ? " busy" : ""}`}
 					onDragOver={(e) => {
@@ -425,7 +410,7 @@ function UploadCard({
 					onDragLeave={() => setDragging(false)}
 					onDrop={onDrop}
 				>
-					<Upload size={20} aria-hidden="true" />
+					<Upload size={16} aria-hidden="true" />
 					<span>
 						{busy ? "Uploading…" : "Drop an image or PDF, or click to choose"}
 					</span>
@@ -454,10 +439,59 @@ function UploadCard({
 					</div>
 				)}
 				<p className="connect-hint">
-					Uploads are free and private to your account.
+					Uploads are free and private to your account. From a terminal, use
+					your API key:
 				</p>
+				<CodeBlock
+					caption="Terminal"
+					code={uploadCurl(uploadUrl, keyForSnippets)}
+				/>
 			</div>
-		</div>
+		</details>
+	);
+}
+
+function ImageSources({
+	uploadUrl,
+	keyForSnippets,
+}: {
+	uploadUrl: string;
+	keyForSnippets: string;
+}) {
+	return (
+		<>
+			<ul className="source-list">
+				<li className="source-row">
+					<span className="source-icon" aria-hidden="true">
+						<Link2 size={16} />
+					</span>
+					<div className="source-text">
+						<h3>A file on the web</h3>
+						<p>
+							Paste the link into your prompt. The server downloads the file
+							itself.
+						</p>
+					</div>
+					<code className="source-tool">open_image</code>
+				</li>
+				<li className="source-row">
+					<span className="source-icon" aria-hidden="true">
+						<FolderOpen size={16} />
+					</span>
+					<div className="source-text">
+						<h3>A file on your computer</h3>
+						<p>
+							Give the agent the file path. It gets a one-time upload link,
+							sends the file from disk, and opens it. The link needs no API key,
+							so the agent never touches yours.
+						</p>
+					</div>
+					<code className="source-tool">request_upload</code>
+				</li>
+			</ul>
+			{/* Optional: delete this line (and ManualUpload) to drop manual uploads. */}
+			<ManualUpload uploadUrl={uploadUrl} keyForSnippets={keyForSnippets} />
+		</>
 	);
 }
 
@@ -639,9 +673,9 @@ function ConnectDashboard({ signOut }: { signOut?: ReactNode }) {
 							index={3}
 							icon={<Upload size={16} />}
 							title="Give it an image"
-							lead="The server runs in the cloud and cannot read files on your machine. Agents upload local files themselves through a one-time link."
+							lead="The server runs in the cloud and cannot read files on your machine, so tell your agent where the file is and it does the rest."
 						>
-							<UploadCard uploadUrl={uploadUrl} keyForSnippets={snippetKey} />
+							<ImageSources uploadUrl={uploadUrl} keyForSnippets={snippetKey} />
 						</Step>
 
 						<Step
