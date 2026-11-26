@@ -669,6 +669,18 @@
 	color: #fcd34d;
 }
 
+.skill-link {
+	font-size: 0.72rem;
+	color: #93c5fd;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.skill-link:hover,
+.skill-link:focus-visible {
+	text-decoration: underline;
+}
+
 /* ---------------------------------------------------------------- skills */
 
 .connect-skills {
@@ -692,6 +704,7 @@
 }
 
 .skill-item {
+	scroll-margin-top: 4.5rem;
 	border: 1px solid rgba(148, 163, 184, 0.14);
 	border-radius: 11px;
 	background: rgba(2, 6, 23, 0.35);

@@ -495,11 +495,55 @@ function ImageSources({
 	);
 }
 
+function skillAnchor(name: string): string {
+	return `skill-${name}`;
+}
+
+/** Sidebar index of the skills, mirroring the tools card. */
+function SkillsCard({ skills }: { skills: Skill[] }) {
+	if (skills.length === 0) return null;
+
+	const reveal = (name: string) => {
+		const item = document.getElementById(skillAnchor(name));
+		if (item instanceof HTMLDetailsElement) item.open = true;
+	};
+
+	return (
+		<section className="side-card card">
+			<h2>
+				<BookOpen size={15} aria-hidden="true" /> Skills
+			</h2>
+			<ul className="tool-list">
+				{skills.map((skill) => (
+					<li key={skill.name}>
+						<div className="tool-line">
+							<code>{skill.name}</code>
+							<a
+								className="skill-link"
+								href={`#${skillAnchor(skill.name)}`}
+								onClick={() => reveal(skill.name)}
+								aria-label={`Read the ${skill.title} skill`}
+							>
+								Read
+							</a>
+						</div>
+						<p>{skill.description}</p>
+					</li>
+				))}
+			</ul>
+		</section>
+	);
+}
+
 function SkillsList({ skills }: { skills: Skill[] }) {
 	return (
 		<div className="skills-list">
 			{skills.map((skill) => (
-				<details key={skill.name} className="skill-item">
+				<details
+					key={skill.name}
+					id={skillAnchor(skill.name)}
+					className="skill-item"
+				>
 					<summary>
 						<span className="skill-title">{skill.title}</span>
 						<code className="skill-name">{skill.name}</code>
@@ -713,6 +757,8 @@ function ConnectDashboard({ signOut }: { signOut?: ReactNode }) {
 								))}
 							</ul>
 						</section>
+
+						<SkillsCard skills={skills} />
 
 						<section className="side-card card side-contact">
 							<h2>Need skills for your documents?</h2>

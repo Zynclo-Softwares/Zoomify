@@ -267,20 +267,6 @@
 	font-size: 1rem;
 }
 
-.landing-cta {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.75rem;
-	width: 100%;
-	max-width: 24rem;
-	margin: 0 auto 2rem;
-}
-
-.landing-cta .landing-btn-lg {
-	min-width: 0;
-	width: 100%;
-}
-
 .landing-features {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -319,17 +305,6 @@
 
 	.landing-hero {
 		padding: 1.5rem 0.75rem 1.25rem;
-	}
-
-	.landing-cta {
-		gap: 0.5rem;
-		max-width: 100%;
-		margin-bottom: 1.25rem;
-	}
-
-	.landing-cta .landing-btn-lg {
-		padding: 0.65rem 0.5rem;
-		font-size: 0.88rem;
 	}
 
 	.landing-features {
@@ -561,4 +536,40 @@
 	font-size: 0.78rem;
 	line-height: 1.6;
 	color: #dbeafe;
+}
+
+.landing-snippet-key {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	margin: 0 0.1rem;
+	padding: 0.08rem 0.5rem;
+	border: 1px dashed rgba(96, 165, 250, 0.55);
+	border-radius: 6px;
+	background: rgba(59, 130, 246, 0.14);
+	color: #93c5fd;
+	font: inherit;
+	text-decoration: none;
+	white-space: nowrap;
+	vertical-align: baseline;
+	transition:
+		background 0.15s ease,
+		border-color 0.15s ease,
+		color 0.15s ease;
+}
+
+.landing-snippet-key:hover,
+.landing-snippet-key:focus-visible {
+	border-style: solid;
+	border-color: #60a5fa;
+	background: rgba(59, 130, 246, 0.28);
+	color: #dbeafe;
+}
+
+@media (max-width: 768px) {
+	/* Wrap instead of scrolling so the key button is never off screen. */
+	.landing-snippet {
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
 }

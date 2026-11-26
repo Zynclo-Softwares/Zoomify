@@ -1,4 +1,7 @@
+import { useAuth } from "@clerk/react";
+import { ArrowUpRight, KeyRound } from "lucide-react";
 import { Link } from "react-router-dom";
+import { isClerkConfigured } from "../auth";
 import FeatureIcon, { type IconName } from "../components/FeatureIcon";
 import LandingNav from "../components/LandingNav";
 import ZoomifyLogo from "../components/ZoomifyLogo";
@@ -36,6 +39,33 @@ const FEATURES: { icon: IconName; title: string; desc: string }[] = [
 		desc: "1,000 requests a month at no cost. Open source, so you can also host it yourself.",
 	},
 ];
+
+/** The key slot in the example command: a chip that leads to a real key. */
+function KeyChip({ to }: { to: string }) {
+	return (
+		<Link
+			to={to}
+			className="landing-snippet-key"
+			aria-label="Get a free API key"
+			title="Get a free API key"
+		>
+			<KeyRound size={13} aria-hidden="true" />
+			API key
+			<ArrowUpRight size={13} aria-hidden="true" />
+		</Link>
+	);
+}
+
+/** Signed-out visitors sign up first (Clerk then sends them to /connect). */
+function ClerkKeyChip() {
+	const { isSignedIn } = useAuth();
+	return <KeyChip to={isSignedIn ? "/connect" : "/sign-up"} />;
+}
+
+function KeyButton() {
+	// Without Clerk (local dev, self-hosting) there is no sign-up step.
+	return isClerkConfigured() ? <ClerkKeyChip /> : <KeyChip to="/connect" />;
+}
 
 export default function LandingPage() {
 	return (
@@ -76,19 +106,13 @@ export default function LandingPage() {
 					is a cloud MCP server that lets any agent grid, zoom, and re-read
 					drawings, scans, and PDFs until every value is legible.
 				</p>
-				<div className="landing-cta">
-					<Link to="/sign-up" className="landing-btn landing-btn-lg">
-						Get a free API key
-					</Link>
-					<Link to="/connect" className="landing-btn ghost landing-btn-lg">
-						Connect an agent
-					</Link>
-				</div>
 				<pre className="landing-snippet">
 					<code>
 						{"claude mcp add --transport http zoomify "}
 						{window.location.origin}
-						{'/mcp \\\n  --header "Authorization: Bearer zfy_live_…"'}
+						{'/mcp \\\n  --header "Authorization: Bearer '}
+						<KeyButton />
+						{'"'}
 					</code>
 				</pre>
 				<div className="landing-features">
