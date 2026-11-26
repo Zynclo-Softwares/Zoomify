@@ -449,20 +449,45 @@ def schema_inquiry(body: SchemaInquiryRequest):
 # --------------------------------------------------------------- web UI
 
 
-if FRONTEND_DIST.is_dir():
-    assets_dir = FRONTEND_DIST / "assets"
+# index.html names the current hashed bundles, so browsers must revalidate it on
+# every visit; without an explicit header they cache it heuristically and show
+# the previous deploy until a reload. The bundles themselves never change under
+# a given name, so they can be cached for good.
+HTML_CACHE_CONTROL = "no-cache"
+ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+
+class ImmutableStaticFiles(StaticFiles):
+    """Static files whose names contain a content hash (Vite's ``/assets``)."""
+
+    async def get_response(self, path: str, scope: Scope):
+        response = await super().get_response(path, scope)
+        if response.status_code in (200, 206, 304):
+            response.headers["Cache-Control"] = ASSET_CACHE_CONTROL
+        return response
+
+
+def mount_frontend(app: FastAPI, dist: Path) -> None:
+    """Serve the built SPA from ``dist``: hashed assets, public files, index.html."""
+    no_cache = {"Cache-Control": HTML_CACHE_CONTROL}
+    assets_dir = dist / "assets"
     if assets_dir.is_dir():
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+        app.mount("/assets", ImmutableStaticFiles(directory=assets_dir), name="assets")
 
     @app.get("/", include_in_schema=False)
     def spa_root():
-        return FileResponse(FRONTEND_DIST / "index.html")
+        return FileResponse(dist / "index.html", headers=no_cache)
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str):
-        if full_path.startswith("api/"):
+        if full_path.startswith(("api/", "assets/")):
             raise HTTPException(status_code=404)
-        candidate = (FRONTEND_DIST / full_path).resolve()
-        if candidate.is_file() and candidate.is_relative_to(FRONTEND_DIST):
-            return FileResponse(candidate)
-        return FileResponse(FRONTEND_DIST / "index.html")
+        candidate = (dist / full_path).resolve()
+        if candidate.is_file() and candidate.is_relative_to(dist):
+            # Unhashed public files (favicon, logo) can change between deploys.
+            return FileResponse(candidate, headers=no_cache)
+        return FileResponse(dist / "index.html", headers=no_cache)
+
+
+if FRONTEND_DIST.is_dir():
+    mount_frontend(app, FRONTEND_DIST)
