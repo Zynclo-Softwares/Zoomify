@@ -74,7 +74,7 @@ Every change goes through **one issue → one patch branch → one PR**.
 - Metering: only `open_image` and `zoom` count as requests; limits live in `src/zoomify/account/plans.py`
 - Session state is a **zoom stack** (`ImageState.path`); views render from `original + path`
 - Grid drawing: `src/zoomify/core/gridder.py`; zoom/crop/path: `src/zoomify/core/gridzoom.py`
-- Frontend (`frontend/`): landing, pricing, and the Connect page (`src/pages/ConnectPage.tsx`, snippets in `src/connectSnippets.ts`)
+- Frontend (`frontend/`): landing, pricing, and the Connect page (`src/pages/ConnectPage.tsx`, snippets in `src/lib/connectSnippets.ts`; shared helpers live in `src/lib/`)
 - `.vscode/` and `Example Files/` are gitignored — do not commit them
 - License: MIT — keep copyright and credit to **Zynclo Softwares**
 

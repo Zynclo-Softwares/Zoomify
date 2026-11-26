@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { type BillingPlansResponse, fetchBillingPlans } from "../api";
-import { openSchemaContact } from "../schemaContact";
+import { type BillingPlansResponse, fetchBillingPlans } from "../lib/api";
+import { openSchemaContact } from "../lib/schemaContact";
 import "./PricingSection.css";
 import "./SchemaContactModal.css";
 

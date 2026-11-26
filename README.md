@@ -194,7 +194,7 @@ and ask before writing code.
 | A new **skill** for a kind of document you know well (P&IDs, floor plans, lab reports, invoices, maps) | `src/zoomify/skills/<name>.md` | One Markdown file, no code. Served as a prompt, a resource, and through `read_skill` automatically. |
 | Improve an existing skill | `src/zoomify/skills/` | Tell us in the issue what the agent got wrong before your change. |
 | A new or better **tool** | `src/zoomify/mcp_server.py`, `src/zoomify/core/tools.py` | Add tests in `tests/test_mcp_server.py`. |
-| A connection snippet for another MCP client | `frontend/src/connectSnippets.ts` | Append one entry to `CLIENTS`. |
+| A connection snippet for another MCP client | `frontend/src/lib/connectSnippets.ts` | Append one entry to `CLIENTS`. |
 | Grid and zoom engine | `src/zoomify/core/gridder.py`, `src/zoomify/core/gridzoom.py` | Before and after images in the PR help a lot. |
 | Docs, examples, bug reports | anywhere | A clear bug report with a sample image is a real contribution. |
 
@@ -242,6 +242,7 @@ Zoomify/
 │       ├── openapi.py          # OpenAPI docs customisation
 │       └── github_issues.py    # files contact-form inquiries as GitHub issues
 ├── frontend/                   # React (Vite): landing, pricing, Connect page
+│   └── src/                    # pages/, components/, lib/ (API client, auth, snippets, toasts)
 ├── terraform/                  # Stripe products/prices/links, Railway, DNS
 └── tests/                      # pytest
 ```
