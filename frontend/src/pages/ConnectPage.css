@@ -618,8 +618,7 @@
 	font-weight: 600;
 }
 
-.side-card h2,
-.connect-skills h2 {
+.side-card h2 {
 	display: flex;
 	align-items: center;
 	gap: 0.4rem;
@@ -670,6 +669,11 @@
 }
 
 .skill-link {
+	padding: 0;
+	border: none;
+	background: none;
+	font-family: inherit;
+	cursor: pointer;
 	font-size: 0.72rem;
 	color: #93c5fd;
 	text-decoration: none;
@@ -683,62 +687,57 @@
 
 /* ---------------------------------------------------------------- skills */
 
-.connect-skills {
-	margin-top: 1rem;
+.side-card .skills-note {
+	margin: -0.2rem 0 0.8rem;
+	font-size: 0.77rem;
+	line-height: 1.45;
+}
+
+.skill-dialog {
+	width: min(100% - 2rem, 46rem);
+	max-height: min(100% - 2rem, 44rem);
+	padding: 0;
+	border: 1px solid rgba(148, 163, 184, 0.2);
+	border-radius: 14px;
+	background: #0b1220;
+	color: var(--text, #e2e8f0);
+	box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+
+.skill-dialog::backdrop {
+	background: rgba(2, 6, 23, 0.72);
+	backdrop-filter: blur(4px);
+}
+
+.skill-dialog-inner {
+	display: flex;
+	flex-direction: column;
+	max-height: min(100vh - 2rem, 44rem);
 	padding: 1.15rem 1.25rem 1.25rem;
 }
 
-.connect-skills header {
-	margin-bottom: 0.9rem;
-}
-
-.connect-skills h2 {
-	font-size: 1.05rem;
-	margin-bottom: 0.3rem;
-}
-
-.skills-list {
+.skill-dialog-head {
 	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
 }
 
-.skill-item {
-	scroll-margin-top: 4.5rem;
-	border: 1px solid rgba(148, 163, 184, 0.14);
-	border-radius: 11px;
-	background: rgba(2, 6, 23, 0.35);
+.skill-dialog-head h2 {
+	margin: 0 0 0.35rem;
+	font-size: 1.1rem;
 }
 
-.skill-item summary {
-	display: grid;
-	grid-template-columns: auto auto 1fr;
-	align-items: baseline;
-	gap: 0.3rem 0.65rem;
-	padding: 0.7rem 0.9rem;
-	cursor: pointer;
-	list-style-position: outside;
-}
-
-.skill-title {
-	font-weight: 600;
-	font-size: 0.9rem;
-}
-
-.skill-desc {
-	grid-column: 1 / -1;
+.skill-dialog-desc {
+	margin: 0.6rem 0 0.85rem;
 	color: var(--muted);
-	font-size: 0.8rem;
-}
-
-.skill-body {
-	padding: 0 0.9rem 0.9rem;
+	font-size: 0.85rem;
 }
 
 .skill-actions {
 	display: flex;
 	gap: 0.45rem;
-	margin-bottom: 0.6rem;
+	margin-bottom: 0.7rem;
 }
 
 .skill-actions .btn {
@@ -747,9 +746,10 @@
 	font-size: 0.76rem;
 }
 
-.skill-body pre {
+.skill-dialog pre {
+	flex: 1;
+	min-height: 0;
 	margin: 0;
-	max-height: 26rem;
 	padding: 0.85rem 0.95rem;
 	overflow: auto;
 	scrollbar-width: thin;
@@ -761,6 +761,75 @@
 	line-height: 1.6;
 	color: #cbd5e1;
 	white-space: pre-wrap;
+}
+
+/* ------------------------------------------------- custom skills callout */
+
+.contact-banner {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	padding: 1.05rem 1.25rem;
+	border: 1px dashed rgba(251, 191, 36, 0.45);
+	border-radius: 999px 18px 18px 999px;
+	background: linear-gradient(
+		100deg,
+		rgba(251, 191, 36, 0.14),
+		rgba(249, 115, 22, 0.06) 55%,
+		rgba(2, 6, 23, 0)
+	);
+}
+
+.contact-banner-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 2.6rem;
+	height: 2.6rem;
+	border-radius: 999px;
+	background: rgba(251, 191, 36, 0.16);
+	color: #fcd34d;
+}
+
+.contact-banner-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.contact-banner-text h2 {
+	margin: 0 0 0.2rem;
+	font-size: 1rem;
+	color: #fde68a;
+}
+
+.contact-banner-text p {
+	margin: 0;
+	color: var(--muted);
+	font-size: 0.85rem;
+	line-height: 1.5;
+}
+
+.contact-banner-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex: none;
+	height: 2.5rem;
+	padding: 0 1.05rem;
+	border: none;
+	border-radius: 999px;
+	background: #fbbf24;
+	color: #1c1917;
+	font: inherit;
+	font-size: 0.86rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.contact-banner-btn:hover,
+.contact-banner-btn:focus-visible {
+	background: #fcd34d;
 }
 
 /* ---------------------------------------------------------------- responsive */
@@ -809,8 +878,9 @@
 		margin-top: 0;
 	}
 
-	.skill-item summary {
-		grid-template-columns: 1fr;
+	.contact-banner {
+		flex-wrap: wrap;
+		border-radius: 18px;
 	}
 
 	.key-row {
