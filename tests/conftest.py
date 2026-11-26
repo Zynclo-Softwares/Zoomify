@@ -92,3 +92,35 @@ def pdf_bytes(small_img) -> bytes:
     buf = io.BytesIO()
     small_img.save(buf, format="PDF", save_all=True, append_images=[small_img])
     return buf.getvalue()
+
+
+@pytest.fixture
+def text_pdf_bytes() -> bytes:
+    """A three-page PDF with a real text layer: "Sheet N of 3 <topic>"."""
+    topics = ["Cover and drawing index", "Single line diagram", "Panel schedule"]
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [%s] /Count 3 >>"
+        % b" ".join(b"%d 0 R" % (4 + 2 * i) for i in range(3)),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    for i, topic in enumerate(topics):
+        stream = f"BT /F1 24 Tf 72 700 Td (Sheet {i + 1} of 3 {topic}) Tj ET".encode()
+        objects.append(
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            b"/Resources << /Font << /F1 3 0 R >> >> /Contents %d 0 R >>" % (5 + 2 * i)
+        )
+        objects.append(b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream))
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n%s\nendobj\n" % (number, body)
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % off for off in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1,
+        xref,
+    )
+    return bytes(out)

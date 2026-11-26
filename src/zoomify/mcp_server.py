@@ -7,8 +7,8 @@ Built on the official MCP Python SDK and served over Streamable HTTP at
 Tools
 -----
 Metered (one *request* each): ``open_image``, ``zoom``
-Free: ``request_upload``, ``undo``, ``redo``, ``restore``, ``view``, ``usage``,
-``read_skill``
+Free: ``request_upload``, ``pdf_pages``, ``undo``, ``redo``, ``restore``,
+``view``, ``usage``, ``read_skill``
 
 Extending
 ---------
@@ -35,7 +35,17 @@ from pydantic import Field
 
 from .billing import QuotaExceeded, enforce_quota, record_usage
 from .db import user_billing_status
-from .images import UPLOAD_TICKET_TTL_SECONDS, ImageError, fetch_url, load_image, uploads
+from .images import (
+    UPLOAD_TICKET_TTL_SECONDS,
+    ImageError,
+    Upload,
+    describe_upload,
+    fetch_url,
+    is_pdf,
+    load_image,
+    pdf_outline,
+    uploads,
+)
 from .plans import plan_for_id
 from .platform_keys import is_platform_key, lookup_clerk_user_by_platform_key
 from .session import ZoomSession, store
@@ -66,6 +76,14 @@ upload_url needs no API key, so never look for, read, or ask for the user's key.
 re-gridded so you can zoom again.
 3. undo steps back one level, restore returns to the full image, view re-shows \
 the current view.
+
+PDFs are sent once and then addressed by page number. A PDF always has an \
+image_id (from request_upload, or reported by open_image / pdf_pages when it \
+came from a URL): keep it and never upload or download the file again. \
+pdf_pages(image_id) is free and gives the page count, each page's text and, \
+with previews=true, thumbnails, so you can pick the right page. Then \
+open_image(image_id=…, page=N) renders only that page, and you zoom as usual. \
+Each page is its own session; say which page every value came from.
 
 Never report a value read from the overview; zoom until the text is sharp, and \
 say so if it stays illegible. Grid labels always refer to the current view.
@@ -202,6 +220,41 @@ def _decode_inline(value: str, max_bytes: int) -> bytes:
     return data
 
 
+def _resolve_source(
+    user_id: str, url: str, upload_id: str, inline: str, max_bytes: int
+) -> tuple[bytes, str, Upload | None]:
+    """Fetch the bytes behind one of the three sources: ``(data, label, upload)``.
+
+    PDFs that arrive by URL or inline are kept as an upload so every later page
+    is served from the stored copy instead of a new download. A URL that was
+    already stored is not downloaded again.
+    """
+    if upload_id:
+        upload = uploads.get(user_id, upload_id)
+        if upload is None:
+            raise ImageError(
+                f"Unknown or expired image_id {upload_id!r}. Nothing has been uploaded "
+                "under that id, or it is more than an hour old. Call request_upload "
+                "and run the curl command it returns, then try again."
+            )
+        return upload.data, upload.filename or upload_id, upload
+    if inline:
+        data, label, source = _decode_inline(inline, max_bytes), "inline image", ""
+    else:
+        cached = uploads.find_by_source(user_id, url)
+        if cached is not None:
+            return cached.data, cached.filename or cached.id, cached
+        data, source = fetch_url(url, max_bytes), url
+        label = url.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1][:80] or url[:80]
+    if not is_pdf(data):
+        return data, label, None
+    if not source:
+        label = "inline PDF"
+    pages = describe_upload(data)["pages"]
+    upload = uploads.put(user_id, data, label, "pdf", pages, source=source)
+    return data, label, upload
+
+
 def _meter(user_id: str) -> dict | None:
     """Check plan limits before a metered tool runs (raises ``ToolError`` if blocked)."""
     if quotas_disabled():
@@ -304,7 +357,14 @@ def build_mcp() -> MCPServer:
             ),
         ] = None,
         page: Annotated[
-            int, Field(ge=1, description="For PDFs: 1-based page number to open (default 1).")
+            int,
+            Field(
+                ge=1,
+                description=(
+                    "For PDFs: 1-based page number to render (default 1). Only this page "
+                    "is rendered. Use pdf_pages to find the right page first."
+                ),
+            ),
         ] = 1,
         grid_cols: Annotated[
             int | None,
@@ -321,8 +381,13 @@ def build_mcp() -> MCPServer:
         (columns A, B, …; rows 1, 2, …). Pass exactly one of `image_url`,
         `image_id`, or `image_base64`. For a file on the user's machine, call
         `request_upload` first. Supports PNG, JPEG, WebP, TIFF, GIF, BMP, and
-        PDF (one page per session). Then call `zoom` with cells from the grid to
-        read detail. Counts as one request.
+        PDF. Then call `zoom` with cells from the grid to read detail.
+
+        A PDF is stored once and opened one page per session: the result names
+        its `image_id`, so open any other page with
+        `open_image(image_id=…, page=N)` without sending the file again. Call
+        `pdf_pages` (free) to see the page count and choose a page. Counts as
+        one request.
         """
         user_id = _user_id(ctx)
         url = (image_url or "").strip()
@@ -338,23 +403,11 @@ def build_mcp() -> MCPServer:
         plan = plan_for_id(status["plan"] if status else "pro")
         max_bytes = plan.max_image_mb * 1024 * 1024
 
-        def work() -> tuple[ZoomSession, list[str]]:
-            if upload_id:
-                upload = uploads.get(user_id, upload_id)
-                if upload is None:
-                    raise ImageError(
-                        f"Unknown or expired image_id {upload_id!r}. Nothing has been uploaded "
-                        "under that id, or it is more than an hour old. Call request_upload "
-                        "and run the curl command it returns, then try again."
-                    )
-                data, label = upload.data, upload.filename or upload_id
-            elif inline:
-                data, label = _decode_inline(inline, max_bytes), "inline image"
-            else:
-                data, label = fetch_url(url, max_bytes), url.rsplit("/", 1)[-1][:80] or url
+        def work() -> tuple[ZoomSession, list[str], Upload | None]:
+            data, label, upload = _resolve_source(user_id, url, upload_id, inline, max_bytes)
             loaded = load_image(data, page=page)
             state = ImageState.from_image(loaded.image, cols=grid_cols)
-            return store.create(
+            session, evicted = store.create(
                 user_id,
                 state,
                 label=label,
@@ -363,9 +416,10 @@ def build_mcp() -> MCPServer:
                 page=loaded.page,
                 page_count=loaded.page_count,
             )
+            return session, evicted, upload
 
         try:
-            session, evicted = await anyio.to_thread.run_sync(work)
+            session, evicted, upload = await anyio.to_thread.run_sync(work)
         except ImageError as exc:
             raise ToolError(str(exc)) from exc
 
@@ -375,14 +429,13 @@ def build_mcp() -> MCPServer:
             _grid_summary(session.state),
         ]
         if session.source_kind == "pdf":
-            parts.append(
-                f"PDF page {session.page} of {session.page_count}"
-                + (
-                    " — call open_image with another `page` for the rest."
-                    if session.page_count > 1
-                    else "."
+            parts.append(f"PDF page {session.page} of {session.page_count}.")
+            if session.page_count > 1 and upload is not None:
+                parts.append(
+                    f"The PDF is stored as image_id {upload.id}: open another page with "
+                    f"open_image(image_id='{upload.id}', page=N), or call pdf_pages to "
+                    "pick one. Do not send the file again."
                 )
-            )
         parts.append(
             "This overview is only for locating things: call zoom with cells such as "
             "'C2' or '1-3-B-E' before reading any values."
@@ -530,8 +583,10 @@ def build_mcp() -> MCPServer:
         Use this whenever the image is a file on the user's machine. Run the
         returned `curl` command in your shell (it sends the file straight from
         disk, so the file never passes through your context), then call
-        `open_image(image_id=…)` with the returned `image_id`. The link works
-        once, for one file, and expires in 15 minutes. Do not read or ask for
+        `open_image(image_id=…)` with the returned `image_id`. A multi-page PDF
+        is uploaded once: the same `image_id` serves every page through
+        `pdf_pages` and `open_image(page=N)`. The link works once, for one
+        file, and expires in 15 minutes. Do not read or ask for
         the user's API key. Free.
         """
         user_id = _user_id(ctx)
@@ -549,8 +604,115 @@ def build_mcp() -> MCPServer:
             "method": "PUT (raw file body) or POST (multipart field 'file')",
             "max_mb": plan.max_image_mb,
             "expires_in_seconds": UPLOAD_TICKET_TTL_SECONDS,
-            "next": f"After the upload succeeds, call open_image(image_id='{ticket.image_id}').",
+            "next": (
+                f"After the upload succeeds, call open_image(image_id='{ticket.image_id}'). "
+                f"For a multi-page PDF, call pdf_pages(image_id='{ticket.image_id}') to pick "
+                "a page, then open_image with that page number. Upload once only."
+            ),
         }
+
+    @server.tool(
+        title="List PDF pages",
+        structured_output=False,
+        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True),
+    )
+    async def pdf_pages(
+        ctx: Context,
+        image_id: Annotated[
+            str | None,
+            Field(
+                description="Id of a stored PDF, e.g. 'img_…' (from request_upload or open_image)."
+            ),
+        ] = None,
+        image_url: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Public http(s) URL of a PDF. The server downloads it once, stores it, "
+                    "and returns an image_id to use from then on."
+                )
+            ),
+        ] = None,
+        pages: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Pages to describe: '3', '2-6', or '1,4,9-12'. Omit to list from page 1. "
+                    "A single page returns its full text instead of a snippet."
+                )
+            ),
+        ] = None,
+        previews: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Also return one contact sheet of small page thumbnails (up to 12 pages "
+                    "per call). Use it for scans and drawings whose pages have no text."
+                )
+            ),
+        ] = False,
+    ) -> list[Any]:
+        """Look inside a multi-page PDF to choose which page to open.
+
+        Returns the PDF's `image_id`, its page count, and for each listed page
+        its size and the start of its text. Ask for one page to get its text in
+        full, or set `previews` for thumbnails when pages are scans or drawings
+        without text. Then call `open_image(image_id=…, page=N)` on the page you
+        need; only that page is rendered. The PDF is stored once, so nothing is
+        uploaded or downloaded again. The text and thumbnails are for choosing a
+        page: read values with `open_image` and `zoom`. Free.
+        """
+        user_id = _user_id(ctx)
+        url = (image_url or "").strip()
+        upload_id = (image_id or "").strip()
+        if bool(url) == bool(upload_id):
+            raise ToolError(
+                "Pass exactly one of image_id or image_url. For a local file, call "
+                "request_upload first."
+            )
+        status = await anyio.to_thread.run_sync(user_billing_status, user_id)
+        max_bytes = plan_for_id(status["plan"]).max_image_mb * 1024 * 1024
+
+        def work() -> tuple[str, Any, Upload | None]:
+            data, label, upload = _resolve_source(user_id, url, upload_id, "", max_bytes)
+            return label, pdf_outline(data, pages=pages, previews=previews), upload
+
+        try:
+            label, outline, upload = await anyio.to_thread.run_sync(work)
+        except ImageError as exc:
+            raise ToolError(str(exc)) from exc
+
+        ref = upload.id if upload is not None else upload_id
+        lines = [
+            f"{label!r} is a PDF with {outline.page_count} page(s), stored as image_id {ref}. "
+            f"Open a page with open_image(image_id='{ref}', page=N)."
+        ]
+        for info in outline.pages:
+            head = f"Page {info.page} ({info.width_in} x {info.height_in} in)"
+            if not info.text_chars:
+                lines.append(f"{head}: no text layer (scan or drawing).")
+            elif len(outline.pages) == 1:
+                cut = " (cut)" if info.text_chars > len(info.text) else ""
+                lines.append(f"{head}, text{cut}:\n{info.text}")
+            else:
+                more = "…" if info.text_chars > len(info.text) else ""
+                lines.append(f"{head}: {' '.join(info.text.split())}{more}")
+        if outline.truncated:
+            last = outline.pages[-1].page
+            lines.append(
+                f"Listed through page {last}. Call pdf_pages again with pages="
+                f"'{last + 1}-{outline.page_count}' for the rest."
+            )
+        if any(not info.text_chars for info in outline.pages) and not previews:
+            lines.append("Pages without text can be told apart with previews=true.")
+        lines.append(
+            "Page text and thumbnails are for choosing a page; zoom before reporting values."
+        )
+        result: list[Any] = ["\n".join(lines)]
+        if outline.preview is not None:
+            data, fmt = encode_view(outline.preview)
+            result.append(Image(data=data, format=fmt))
+        return result
 
     # ---- account & guidance -------------------------------------------
 
@@ -659,6 +821,11 @@ def tools_catalog() -> list[dict[str, Any]]:
             "name": "request_upload",
             "metered": False,
             "summary": "One-time upload link so an agent can send a local file without the key.",
+        },
+        {
+            "name": "pdf_pages",
+            "metered": False,
+            "summary": "Page count, page text, and thumbnails of a stored PDF, to pick a page.",
         },
         {
             "name": "usage",

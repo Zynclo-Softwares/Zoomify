@@ -98,15 +98,28 @@ curl -s https://<host>/api/images \
 ```
 
 Uploads are private to your account, kept in memory, and expire after an hour.
-PNG, JPEG, WebP, TIFF, GIF, BMP, and PDF (one page per session) are supported.
+PNG, JPEG, WebP, TIFF, GIF, BMP, and PDF are supported.
+
+**Multi-page PDFs are sent once and addressed by page number.** The server
+keeps the file under its `image_id` (a PDF opened from a URL gets one too), and
+renders a page only when it is asked for:
+
+```text
+pdf_pages(image_id="img_…")               → 14 pages, with each page's text (free)
+pdf_pages(image_id="img_…", previews=true) → thumbnails, for scans without text (free)
+open_image(image_id="img_…", page=9)      → renders page 9 only, starts a session
+zoom(session_id, "C2") …                  → the usual zoom loop on that page
+open_image(image_id="img_…", page=10)     → next page, no new upload
+```
 
 ## Tools
 
 | Tool | Cost | What it does |
 |------|------|--------------|
-| `open_image` | 1 request | Opens an image or PDF page; returns a `session_id` and the full image with a labeled grid (columns `A…`, rows `1…`). |
+| `open_image` | 1 request | Opens an image or one PDF page (`page=N`); returns a `session_id` and the full image with a labeled grid (columns `A…`, rows `1…`). |
 | `zoom` | 1 request | Crops a selection (`C2`, `1-3-B-E`, `1C,3B`), upscales it, re-grids it, and **pushes** a step onto the session's zoom stack. |
 | `request_upload` | free | Returns a one-time upload link and `curl` command so the agent can send a local file without the API key. |
+| `pdf_pages` | free | For a stored PDF: page count, each page's size and text, and optional thumbnails, so the agent can pick a page. |
 | `undo` | free | **Pops** the last zoom step. |
 | `redo` | free | Re-pushes the step last popped by `undo`. |
 | `restore` | free | Clears the stack back to the full gridded image. |

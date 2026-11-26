@@ -9,6 +9,15 @@ description: Reading electrical single-line diagrams, architectural and mechanic
 Read `zoom-basics` first. This adds the reading order and the traps specific to
 technical drawings.
 
+## Drawing sets (multi-page PDFs)
+
+A set is sent once and opened sheet by sheet by page number. Call
+`pdf_pages(image_id=…, previews=true)` to see every sheet as a thumbnail (sets
+are often scans with no text), find the sheet you need, usually from a drawing
+index on the first pages, then `open_image(image_id=…, page=N)`. Report both
+the PDF page number and the sheet number from the title block. Details are in
+`long-documents`.
+
 ## Reading order
 
 1. **Title block** — usually the bottom-right corner or a strip down the right
