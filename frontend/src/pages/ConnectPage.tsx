@@ -1,5 +1,6 @@
 import { SignOutButton, useAuth } from "@clerk/react";
 import {
+	ArrowRight,
 	BookOpen,
 	Check,
 	ChevronRight,
@@ -12,8 +13,10 @@ import {
 	LogOut,
 	Plug,
 	RefreshCw,
+	Sparkles,
 	Upload,
 	Wrench,
+	X,
 } from "lucide-react";
 import {
 	type ChangeEvent,
@@ -495,78 +498,132 @@ function ImageSources({
 	);
 }
 
-function skillAnchor(name: string): string {
-	return `skill-${name}`;
+/** Full text of one skill, with download and copy, in a modal dialog. */
+function SkillDialog({
+	skill,
+	onClose,
+}: {
+	skill: Skill | null;
+	onClose: () => void;
+}) {
+	const ref = useRef<HTMLDialogElement>(null);
+
+	useEffect(() => {
+		const dialog = ref.current;
+		if (!dialog) return;
+		if (skill && !dialog.open) dialog.showModal();
+		if (!skill && dialog.open) dialog.close();
+	}, [skill]);
+
+	return (
+		// biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes a modal dialog natively; the click only handles the backdrop.
+		<dialog
+			ref={ref}
+			className="skill-dialog"
+			aria-labelledby="skill-dialog-title"
+			onClose={onClose}
+			onClick={(event) => {
+				// A click on the dialog element itself is a click on the backdrop.
+				if (event.target === event.currentTarget) onClose();
+			}}
+		>
+			{skill && (
+				<div className="skill-dialog-inner">
+					<header className="skill-dialog-head">
+						<div>
+							<h2 id="skill-dialog-title">{skill.title}</h2>
+							<code>{skill.name}</code>
+						</div>
+						<button
+							type="button"
+							className="icon-btn"
+							onClick={onClose}
+							aria-label="Close"
+							title="Close"
+						>
+							<X size={16} aria-hidden="true" />
+						</button>
+					</header>
+					<p className="skill-dialog-desc">{skill.description}</p>
+					<div className="skill-actions">
+						<a
+							className="btn ghost"
+							href={`/api/skills/${skill.name}.md`}
+							download={`${skill.name}.md`}
+						>
+							Download .md
+						</a>
+						{skill.body && (
+							<CopyButton text={skill.body} label="Copy skill text" />
+						)}
+					</div>
+					<pre>{skill.body}</pre>
+				</div>
+			)}
+		</dialog>
+	);
 }
 
 /** Sidebar index of the skills, mirroring the tools card. */
 function SkillsCard({ skills }: { skills: Skill[] }) {
+	const [open, setOpen] = useState<Skill | null>(null);
 	if (skills.length === 0) return null;
-
-	const reveal = (name: string) => {
-		const item = document.getElementById(skillAnchor(name));
-		if (item instanceof HTMLDetailsElement) item.open = true;
-	};
 
 	return (
 		<section className="side-card card">
 			<h2>
 				<BookOpen size={15} aria-hidden="true" /> Skills
 			</h2>
+			<p className="skills-note">
+				Playbooks the server hands your agent through <code>read_skill</code>.
+				Nothing to install.
+			</p>
 			<ul className="tool-list">
 				{skills.map((skill) => (
 					<li key={skill.name}>
 						<div className="tool-line">
 							<code>{skill.name}</code>
-							<a
+							<button
+								type="button"
 								className="skill-link"
-								href={`#${skillAnchor(skill.name)}`}
-								onClick={() => reveal(skill.name)}
+								onClick={() => setOpen(skill)}
 								aria-label={`Read the ${skill.title} skill`}
 							>
 								Read
-							</a>
+							</button>
 						</div>
 						<p>{skill.description}</p>
 					</li>
 				))}
 			</ul>
+			<SkillDialog skill={open} onClose={() => setOpen(null)} />
 		</section>
 	);
 }
 
-function SkillsList({ skills }: { skills: Skill[] }) {
+/** Sales callout, styled apart from the setup steps and the reference cards. */
+function CustomSkillsBanner() {
 	return (
-		<div className="skills-list">
-			{skills.map((skill) => (
-				<details
-					key={skill.name}
-					id={skillAnchor(skill.name)}
-					className="skill-item"
-				>
-					<summary>
-						<span className="skill-title">{skill.title}</span>
-						<code className="skill-name">{skill.name}</code>
-						<span className="skill-desc">{skill.description}</span>
-					</summary>
-					<div className="skill-body">
-						<div className="skill-actions">
-							<a
-								className="btn ghost"
-								href={`/api/skills/${skill.name}.md`}
-								download={`${skill.name}.md`}
-							>
-								Download .md
-							</a>
-							{skill.body && (
-								<CopyButton text={skill.body} label="Copy skill text" />
-							)}
-						</div>
-						<pre>{skill.body}</pre>
-					</div>
-				</details>
-			))}
-		</div>
+		<aside className="contact-banner" aria-label="Custom skills">
+			<span className="contact-banner-icon" aria-hidden="true">
+				<Sparkles size={18} />
+			</span>
+			<div className="contact-banner-text">
+				<h2>Need skills for your documents?</h2>
+				<p>
+					Zynclo writes custom skills for your drawing standards and forms, and
+					can set up higher limits.
+				</p>
+			</div>
+			<button
+				type="button"
+				className="contact-banner-btn"
+				onClick={openSchemaContact}
+			>
+				Talk to us
+				<ArrowRight size={15} aria-hidden="true" />
+			</button>
+		</aside>
 	);
 }
 
@@ -732,6 +789,8 @@ function ConnectDashboard({ signOut }: { signOut?: ReactNode }) {
 								<CodeBlock caption="Example prompt" code={EXAMPLE_PROMPT} />
 							</div>
 						</Step>
+
+						<CustomSkillsBanner />
 					</div>
 
 					<div className="connect-side">
@@ -759,38 +818,8 @@ function ConnectDashboard({ signOut }: { signOut?: ReactNode }) {
 						</section>
 
 						<SkillsCard skills={skills} />
-
-						<section className="side-card card side-contact">
-							<h2>Need skills for your documents?</h2>
-							<p>
-								Zynclo writes custom skills for your drawing standards and
-								forms, and can set up higher limits.
-							</p>
-							<button
-								type="button"
-								className="btn ghost"
-								onClick={openSchemaContact}
-							>
-								Talk to us
-							</button>
-						</section>
 					</div>
 				</div>
-
-				<section className="connect-skills card">
-					<header>
-						<h2>
-							<BookOpen size={16} aria-hidden="true" /> Skills
-						</h2>
-						<p className="connect-muted">
-							Short playbooks that teach an agent to use the tools well. They
-							are served by the MCP server itself (as prompts, resources, and
-							the <code>read_skill</code> tool), so there is nothing to install
-							— or download one to keep as a local skill file.
-						</p>
-					</header>
-					<SkillsList skills={skills} />
-				</section>
 			</main>
 		</div>
 	);
