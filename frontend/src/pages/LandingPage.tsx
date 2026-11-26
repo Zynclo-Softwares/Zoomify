@@ -1,4 +1,5 @@
 import { useAuth } from "@clerk/react";
+import { ArrowUpRight, KeyRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import { isClerkConfigured } from "../auth";
 import FeatureIcon, { type IconName } from "../components/FeatureIcon";
@@ -39,32 +40,31 @@ const FEATURES: { icon: IconName; title: string; desc: string }[] = [
 	},
 ];
 
-const KEY_BUTTON_LABEL = "Get a free API key";
-const KEY_BUTTON_CLASS = "landing-btn landing-snippet-key";
-
-/** Signed-out visitors sign up first (Clerk then sends them to /connect). */
-function ClerkKeyButton() {
-	const { isSignedIn } = useAuth();
+/** The key slot in the example command: a chip that leads to a real key. */
+function KeyChip({ to }: { to: string }) {
 	return (
 		<Link
-			to={isSignedIn ? "/connect" : "/sign-up"}
-			className={KEY_BUTTON_CLASS}
+			to={to}
+			className="landing-snippet-key"
+			aria-label="Get a free API key"
+			title="Get a free API key"
 		>
-			{KEY_BUTTON_LABEL}
+			<KeyRound size={13} aria-hidden="true" />
+			API key
+			<ArrowUpRight size={13} aria-hidden="true" />
 		</Link>
 	);
 }
 
+/** Signed-out visitors sign up first (Clerk then sends them to /connect). */
+function ClerkKeyChip() {
+	const { isSignedIn } = useAuth();
+	return <KeyChip to={isSignedIn ? "/connect" : "/sign-up"} />;
+}
+
 function KeyButton() {
 	// Without Clerk (local dev, self-hosting) there is no sign-up step.
-	if (!isClerkConfigured()) {
-		return (
-			<Link to="/connect" className={KEY_BUTTON_CLASS}>
-				{KEY_BUTTON_LABEL}
-			</Link>
-		);
-	}
-	return <ClerkKeyButton />;
+	return isClerkConfigured() ? <ClerkKeyChip /> : <KeyChip to="/connect" />;
 }
 
 export default function LandingPage() {
