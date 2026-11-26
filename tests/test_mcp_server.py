@@ -111,6 +111,61 @@ def test_open_image_pdf_page(server, pdf_bytes):
         call(server, "open_image", {"image_id": upload.id, "page": 3})
 
 
+def test_pdf_pages_lists_text_and_full_page(server, text_pdf_bytes):
+    upload = uploads.put(USER, text_pdf_bytes, "set.pdf", "pdf", 3)
+    before = user_billing_status(USER)["monthly_used"]
+
+    result = call(server, "pdf_pages", {"image_id": upload.id})
+    text = text_of(result)
+    assert f"3 page(s), stored as image_id {upload.id}" in text
+    assert "Page 2 (8.5 x 11.0 in): Sheet 2 of 3 Single line diagram" in text
+    assert not [c for c in result.content if c.type == "image"]
+
+    one = text_of(call(server, "pdf_pages", {"image_id": upload.id, "pages": "3"}))
+    assert "Panel schedule" in one and "Single line diagram" not in one
+
+    with pytest.raises(ToolError, match="out of range"):
+        call(server, "pdf_pages", {"image_id": upload.id, "pages": "7"})
+    assert user_billing_status(USER)["monthly_used"] == before  # free
+
+
+def test_pdf_pages_previews_for_scans(server, pdf_bytes):
+    upload = uploads.put(USER, pdf_bytes, "scan.pdf", "pdf", 2)
+    result = call(server, "pdf_pages", {"image_id": upload.id, "previews": True})
+    assert "Page 1" in text_of(result) and "no text layer" in text_of(result)
+    sheet = image_of(result)
+    assert sheet.size[0] > sheet.size[1]  # two thumbnails side by side
+
+
+def test_pdf_pages_rejects_plain_images(server, image_id):
+    with pytest.raises(ToolError, match="not a PDF"):
+        call(server, "pdf_pages", {"image_id": image_id})
+    with pytest.raises(ToolError, match="exactly one"):
+        call(server, "pdf_pages", {})
+
+
+def test_pdf_from_url_is_downloaded_once(server, text_pdf_bytes, monkeypatch):
+    fetched = []
+
+    def fake_fetch(url, max_bytes):
+        fetched.append(url)
+        return text_pdf_bytes
+
+    monkeypatch.setattr(mcp_server, "fetch_url", fake_fetch)
+    url = "https://example.com/files/set.pdf?sig=1"
+
+    listing = text_of(call(server, "pdf_pages", {"image_url": url}))
+    assert "'set.pdf' is a PDF with 3 page(s)" in listing
+    stored = listing.split("image_id ")[1].split(".")[0]
+
+    first = text_of(call(server, "open_image", {"image_url": url, "page": 2}))
+    assert "PDF page 2 of 3" in first and f"open_image(image_id='{stored}', page=N)" in first
+    other = text_of(call(server, "open_image", {"image_id": stored, "page": 3}))
+    assert "PDF page 3 of 3" in other
+    assert fetched == [url]
+    assert store.count(USER) == 2  # one session per page
+
+
 def test_open_image_from_url(server, small_png_bytes, monkeypatch):
     seen = {}
 

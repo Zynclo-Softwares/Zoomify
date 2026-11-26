@@ -167,3 +167,34 @@ def test_fetch_url_enforces_size_and_status(monkeypatch):
     monkeypatch.setattr(images.httpx, "Client", _fake_client([_FakeStream(404)], []))
     with pytest.raises(ImageError, match="HTTP 404"):
         fetch_url("https://cdn.example.com/a.png", 10)
+
+
+def test_parse_page_selection():
+    from zoomify.images import parse_page_selection
+
+    assert parse_page_selection(None, 5, 30) == ([1, 2, 3, 4, 5], False)
+    assert parse_page_selection("4, 1-2", 5, 30) == ([1, 2, 4], False)
+    assert parse_page_selection("2-99", 5, 2) == ([2, 3], True)
+    for bad in ("x", "0", "3-1", "9"):
+        with pytest.raises(ImageError):
+            parse_page_selection(bad, 5, 30)
+
+
+def test_pdf_outline(text_pdf_bytes, small_png_bytes):
+    from zoomify.images import pdf_outline
+
+    outline = pdf_outline(text_pdf_bytes, pages="1-2", previews=True)
+    assert outline.page_count == 3
+    assert [p.page for p in outline.pages] == [1, 2]
+    assert outline.pages[0].text.startswith("Sheet 1 of 3")
+    assert outline.preview is not None
+    with pytest.raises(ImageError, match="not a PDF"):
+        pdf_outline(small_png_bytes)
+
+
+def test_upload_store_finds_by_source(pdf_bytes):
+    uploads = UploadStore()
+    uploads.put("u1", pdf_bytes, "a.pdf", "pdf", 2, source="https://x.test/a.pdf")
+    assert uploads.find_by_source("u1", "https://x.test/a.pdf") is not None
+    assert uploads.find_by_source("u2", "https://x.test/a.pdf") is None
+    assert uploads.find_by_source("u1", "") is None

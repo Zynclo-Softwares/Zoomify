@@ -5,8 +5,9 @@ Agents hand Zoomify an image in one of two ways:
 - ``image_url`` — a public http(s) URL the server downloads (SSRF-guarded).
 - ``image_id``  — returned by ``POST /api/images`` after uploading a local file.
 
-Both accept raster images (anything Pillow reads) and PDFs (one page at a time,
-rendered with pdfium).
+Both accept raster images (anything Pillow reads) and PDFs. A PDF is stored once
+and addressed by page number: :func:`pdf_outline` lists pages (count, text,
+thumbnails) and :func:`load_image` renders only the page that is asked for.
 """
 
 from __future__ import annotations
@@ -34,6 +35,14 @@ MAX_REDIRECTS = 3
 FETCH_TIMEOUT_SECONDS = 20.0
 PDF_RENDER_DPI = 200
 PDF_MAX_SIDE_PX = 9000
+PDF_OUTLINE_MAX_PAGES = 30  # pages listed by one `pdf_pages` call
+PDF_PREVIEW_MAX_PAGES = 12  # thumbnails on one contact sheet
+PDF_SNIPPET_CHARS = 240  # text shown per page when listing several pages
+PDF_PAGE_TEXT_CHARS = 6000  # text shown when exactly one page is asked for
+PDF_THUMB_SIDE_PX = 380
+
+# PDFium is not thread-safe, and tools run on worker threads.
+_PDF_LOCK = threading.Lock()
 
 
 class ImageError(ValueError):
@@ -84,33 +93,174 @@ def _decode_raster(data: bytes) -> Image.Image:
     return img.convert("RGB")
 
 
-def _render_pdf_page(data: bytes, page: int) -> tuple[Image.Image, int]:
+def _open_pdf(data: bytes):
+    """Open a PDF with pdfium; the caller holds ``_PDF_LOCK`` and closes it."""
     import pypdfium2 as pdfium
 
     try:
         pdf = pdfium.PdfDocument(data)
     except Exception as exc:
         raise ImageError(f"Could not open PDF: {exc}") from exc
-    try:
-        count = len(pdf)
-        if count == 0:
-            raise ImageError("PDF has no pages.")
-        if not (1 <= page <= count):
-            raise ImageError(f"Page {page} is out of range — this PDF has {count} page(s).")
-        pdf_page = pdf[page - 1]
-        width_pt, height_pt = pdf_page.get_size()
-        scale = PDF_RENDER_DPI / 72
-        longest = max(width_pt, height_pt) * scale
-        if longest > PDF_MAX_SIDE_PX:
-            scale *= PDF_MAX_SIDE_PX / longest
-        budget = max_image_pixels()
-        pixels = width_pt * height_pt * scale * scale
-        if pixels > budget:
-            scale *= (budget / pixels) ** 0.5
-        img = pdf_page.render(scale=scale).to_pil().convert("RGB")
-        return img, count
-    finally:
+    if len(pdf) == 0:
         pdf.close()
+        raise ImageError("PDF has no pages.")
+    return pdf
+
+
+def _render_pdf_page(data: bytes, page: int) -> tuple[Image.Image, int]:
+    with _PDF_LOCK:
+        pdf = _open_pdf(data)
+        try:
+            count = len(pdf)
+            if not (1 <= page <= count):
+                raise ImageError(f"Page {page} is out of range — this PDF has {count} page(s).")
+            pdf_page = pdf[page - 1]
+            width_pt, height_pt = pdf_page.get_size()
+            scale = PDF_RENDER_DPI / 72
+            longest = max(width_pt, height_pt) * scale
+            if longest > PDF_MAX_SIDE_PX:
+                scale *= PDF_MAX_SIDE_PX / longest
+            budget = max_image_pixels()
+            pixels = width_pt * height_pt * scale * scale
+            if pixels > budget:
+                scale *= (budget / pixels) ** 0.5
+            img = pdf_page.render(scale=scale).to_pil().convert("RGB")
+            return img, count
+        finally:
+            pdf.close()
+
+
+def parse_page_selection(spec: str | None, count: int, limit: int) -> tuple[list[int], bool]:
+    """Turn ``"3"``, ``"2-6"`` or ``"1,4,9-12"`` into page numbers.
+
+    Returns ``(pages, truncated)``: at most ``limit`` pages in ascending order,
+    and whether more were asked for. An empty spec means "from page 1".
+    """
+    text = (spec or "").strip()
+    wanted: set[int] = set()
+    if not text:
+        wanted.update(range(1, count + 1))
+    for part in filter(None, (p.strip() for p in text.split(","))):
+        lo, sep, hi = part.partition("-")
+        try:
+            first = int(lo)
+            last = int(hi) if sep else first
+        except ValueError as exc:
+            raise ImageError(
+                f"Could not read pages {spec!r}. Use a page ('3'), a range ('2-6'), "
+                "or a list ('1,4,9-12')."
+            ) from exc
+        if first < 1 or last < first:
+            raise ImageError(f"Invalid page range {part!r}. Pages start at 1.")
+        if first > count:
+            raise ImageError(f"Page {first} is out of range — this PDF has {count} page(s).")
+        wanted.update(range(first, min(last, count) + 1))
+    pages = sorted(wanted)
+    return pages[:limit], len(pages) > limit
+
+
+@dataclass
+class PdfPageInfo:
+    page: int
+    width_in: float
+    height_in: float
+    text: str  # extracted text layer, possibly cut to the requested length
+    text_chars: int  # full length of the page's text layer (0 for a scan)
+
+
+@dataclass
+class PdfOutline:
+    page_count: int
+    pages: list[PdfPageInfo]
+    truncated: bool  # more pages matched than were returned
+    preview: Image.Image | None = None
+
+
+def _page_text(pdf_page) -> str:
+    try:
+        textpage = pdf_page.get_textpage()
+    except Exception:
+        return ""
+    try:
+        raw = textpage.get_text_bounded()
+    except Exception:
+        return ""
+    finally:
+        textpage.close()
+    lines = (" ".join(line.split()) for line in raw.replace("\x00", "").splitlines())
+    return "\n".join(line for line in lines if line)
+
+
+def _contact_sheet(thumbs: list[tuple[int, Image.Image]]) -> Image.Image:
+    """Lay page thumbnails out on one sheet, each captioned with its page number."""
+    from PIL import ImageDraw
+
+    from .gridder import load_font
+
+    cols = min(4, len(thumbs))
+    rows = -(-len(thumbs) // cols)
+    pad, caption = 14, 34
+    cell_w = max(t.width for _, t in thumbs) + pad
+    cell_h = max(t.height for _, t in thumbs) + caption + pad
+    sheet = Image.new("RGB", (cols * cell_w + pad, rows * cell_h + pad), (236, 238, 242))
+    draw = ImageDraw.Draw(sheet)
+    font = load_font(22)
+    for i, (number, thumb) in enumerate(thumbs):
+        x = pad + (i % cols) * cell_w
+        y = pad + (i // cols) * cell_h
+        draw.text((x, y), f"Page {number}", fill=(20, 24, 32), font=font)
+        sheet.paste(thumb, (x, y + caption))
+        draw.rectangle(
+            (x - 1, y + caption - 1, x + thumb.width, y + caption + thumb.height),
+            outline=(120, 126, 138),
+        )
+    return sheet
+
+
+def pdf_outline(data: bytes, pages: str | None = None, previews: bool = False) -> PdfOutline:
+    """Describe PDF pages without opening a zoom session.
+
+    Reports the page count plus, for the selected pages, their size and text
+    layer (a snippet per page, or most of the text when one page is selected).
+    With ``previews`` it also renders small thumbnails onto one contact sheet,
+    which is how an agent picks a page in a scanned PDF that has no text.
+    """
+    if not is_pdf(data):
+        raise ImageError("That file is an image, not a PDF, so it has no pages to list.")
+    limit = PDF_PREVIEW_MAX_PAGES if previews else PDF_OUTLINE_MAX_PAGES
+    with _PDF_LOCK:
+        pdf = _open_pdf(data)
+        try:
+            count = len(pdf)
+            selected, truncated = parse_page_selection(pages, count, limit)
+            max_chars = PDF_PAGE_TEXT_CHARS if len(selected) == 1 else PDF_SNIPPET_CHARS
+            infos: list[PdfPageInfo] = []
+            thumbs: list[tuple[int, Image.Image]] = []
+            for number in selected:
+                pdf_page = pdf[number - 1]
+                width_pt, height_pt = pdf_page.get_size()
+                text = _page_text(pdf_page)
+                infos.append(
+                    PdfPageInfo(
+                        page=number,
+                        width_in=round(width_pt / 72, 1),
+                        height_in=round(height_pt / 72, 1),
+                        text=text[:max_chars],
+                        text_chars=len(text),
+                    )
+                )
+                if previews:
+                    scale = PDF_THUMB_SIDE_PX / max(width_pt, height_pt, 1)
+                    thumbs.append((number, pdf_page.render(scale=scale).to_pil().convert("RGB")))
+                pdf_page.close()
+        finally:
+            pdf.close()
+    return PdfOutline(
+        page_count=count,
+        pages=infos,
+        truncated=truncated,
+        preview=_contact_sheet(thumbs) if thumbs else None,
+    )
 
 
 def load_image(data: bytes, page: int = 1) -> LoadedImage:
@@ -128,18 +278,12 @@ def load_image(data: bytes, page: int = 1) -> LoadedImage:
 def describe_upload(data: bytes) -> dict:
     """Validate upload bytes cheaply and return ``{kind, pages}`` metadata."""
     if is_pdf(data):
-        import pypdfium2 as pdfium
-
-        try:
-            pdf = pdfium.PdfDocument(data)
-        except Exception as exc:
-            raise ImageError(f"Could not open PDF: {exc}") from exc
-        try:
-            count = len(pdf)
-        finally:
-            pdf.close()
-        if count == 0:
-            raise ImageError("PDF has no pages.")
+        with _PDF_LOCK:
+            pdf = _open_pdf(data)
+            try:
+                count = len(pdf)
+            finally:
+                pdf.close()
         return {"kind": "pdf", "pages": count}
     try:
         with Image.open(io.BytesIO(data)) as img:
@@ -237,6 +381,7 @@ class Upload:
     kind: str
     pages: int
     created_at: float
+    source: str = ""  # URL the server downloaded it from, if any
 
     @property
     def expires_at(self) -> float:
@@ -318,6 +463,7 @@ class UploadStore:
         kind: str,
         pages: int,
         upload_id: str | None = None,
+        source: str = "",
     ) -> Upload:
         now = time.time()
         upload = Upload(
@@ -328,6 +474,7 @@ class UploadStore:
             kind=kind,
             pages=pages,
             created_at=now,
+            source=source,
         )
         with self._lock:
             self._purge(now)
@@ -346,6 +493,15 @@ class UploadStore:
         if upload is None or upload.owner != owner:
             return None
         return upload
+
+    def find_by_source(self, owner: str, source: str) -> Upload | None:
+        """The newest live upload this account's server-side download of ``source`` made."""
+        if not source:
+            return None
+        with self._lock:
+            self._purge(time.time())
+            mine = [u for u in self._items.values() if u.owner == owner and u.source == source]
+        return max(mine, key=lambda u: u.created_at, default=None)
 
     def clear(self) -> None:
         with self._lock:

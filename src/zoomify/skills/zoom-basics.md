@@ -35,6 +35,7 @@ the source that matches what you were given:
 | A file on disk | `request_upload(file_path=…)`, run the `curl` command it returns in your shell, then `open_image(image_id=…)` |
 | An `image_id` (`img_…`) | `open_image(image_id=…)` |
 | A small image already in memory and no shell | `open_image(image_base64=…)` |
+| A multi-page PDF (any of the above) | Send it once, then `pdf_pages(image_id=…)` to pick a page and `open_image(image_id=…, page=N)` to open it — see `long-documents` |
 
 The upload link from `request_upload` needs no API key, works once, and expires
 in 15 minutes. Never search for, read, or ask for the user's Zoomify API key,
