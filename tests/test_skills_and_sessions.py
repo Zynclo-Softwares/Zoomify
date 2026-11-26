@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from zoomify import session as session_mod
+from zoomify.core import session as session_mod
 from zoomify import skills
-from zoomify.session import SessionStore
-from zoomify.tools import ImageState
+from zoomify.core.session import SessionStore
+from zoomify.core.tools import ImageState
 
 
 def test_bundled_skills_are_well_formed():

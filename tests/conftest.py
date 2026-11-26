@@ -21,7 +21,8 @@ def _isolate_server_env(monkeypatch):
     monkeypatch.delenv("RATE_LIMIT_FREE_PER_MINUTE", raising=False)
     monkeypatch.delenv("RATE_LIMIT_STARTER_PER_MINUTE", raising=False)
     monkeypatch.delenv("RATE_LIMIT_PRO_PER_MINUTE", raising=False)
-    from zoomify import billing, clerk_auth, db, images, platform_keys, session
+    from zoomify.account import billing, clerk_auth, db, platform_keys
+    from zoomify.core import images, session
 
     clerk_auth.reset_jwks_cache()
     db.reset_memory_store()
@@ -45,7 +46,7 @@ def small_img() -> Image.Image:
 
 @pytest.fixture
 def state(small_img):
-    from zoomify.tools import ImageState
+    from zoomify.core.tools import ImageState
 
     return ImageState.from_image(small_img, cols=8)
 
@@ -55,7 +56,7 @@ def client():
     """HTTP client without the app lifespan (REST routes only)."""
     from fastapi.testclient import TestClient
 
-    from server import app
+    from zoomify.api.app import app
 
     return TestClient(app)
 
@@ -65,7 +66,7 @@ def live_client():
     """HTTP client with the app lifespan running, so ``/mcp`` is served."""
     from fastapi.testclient import TestClient
 
-    from server import app
+    from zoomify.api.app import app
 
     with TestClient(app) as c:
         yield c

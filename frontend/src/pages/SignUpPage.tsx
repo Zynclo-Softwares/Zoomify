@@ -1,5 +1,5 @@
 import { SignUp } from "@clerk/react";
-import { clerkAppearance } from "../clerkTheme";
+import { clerkAppearance } from "../lib/clerkTheme";
 import AuthShell from "./AuthShell";
 
 export default function SignUpPage() {

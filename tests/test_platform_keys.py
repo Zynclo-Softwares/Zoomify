@@ -6,8 +6,8 @@ import asyncio
 
 import pytest
 
-from zoomify import clerk_auth, platform_keys
-from zoomify.platform_keys import KEY_PREFIX, create_platform_key, rotate_platform_key
+from zoomify.account import clerk_auth, platform_keys
+from zoomify.account.platform_keys import KEY_PREFIX, create_platform_key, rotate_platform_key
 
 
 @pytest.fixture(autouse=True)

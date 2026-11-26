@@ -1,4 +1,4 @@
-"""Tests for zoomify.clerk_auth — Clerk JWT verification."""
+"""Tests for zoomify.account.clerk_auth — Clerk JWT verification."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException
 
-from zoomify import clerk_auth
+from zoomify.account import clerk_auth
 
 
 @pytest.fixture(autouse=True)

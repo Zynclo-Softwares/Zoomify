@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-SKILLS_DIR = Path(__file__).resolve().parent / "skills"
+SKILLS_DIR = Path(__file__).resolve().parent
 CORE_SKILL = "zoom-basics"
 
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")

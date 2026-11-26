@@ -1,10 +1,10 @@
-"""Tests for zoomify.gridzoom — selection parsing + crop/zoom/regrid."""
+"""Tests for zoomify.core.gridzoom — selection parsing + crop/zoom/regrid."""
 
 from __future__ import annotations
 
 import pytest
 
-from zoomify import gridder, gridzoom
+from zoomify.core import gridder, gridzoom
 
 
 # --------------------------------------------------------------- parsing
@@ -198,7 +198,7 @@ def test_render_at_path_matches_single_zoom(gridded):
     gridded_img, meta = gridded
     plain = Image.new("RGB", (400, 300), "white")
 
-    from zoomify.tools import ZoomStep
+    from zoomify.core.tools import ZoomStep
 
     step = ZoomStep(select="2C", zoom=3, regrid_cols=6)
     via_path, meta_path, content_path = gridzoom.render_at_path(

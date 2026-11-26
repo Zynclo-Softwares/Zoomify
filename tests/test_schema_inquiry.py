@@ -1,6 +1,6 @@
 def test_schema_inquiry_endpoint(client, monkeypatch):
     monkeypatch.setattr(
-        "server.create_schema_inquiry_issue",
+        "zoomify.api.app.create_schema_inquiry_issue",
         lambda **kwargs: {
             "issue_number": 7,
             "issue_url": "https://github.com/Zynclo-Softwares/Zoomify/issues/7",
@@ -31,7 +31,7 @@ def test_schema_inquiry_validation(client):
 
 def test_schema_inquiry_unconfigured(client, monkeypatch):
     monkeypatch.setattr(
-        "server.create_schema_inquiry_issue",
+        "zoomify.api.app.create_schema_inquiry_issue",
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("Schema inquiry is not configured")),
     )
     r = client.post(

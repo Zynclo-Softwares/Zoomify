@@ -1,9 +1,9 @@
 import pytest
 
-from zoomify import billing
-from zoomify.billing import QuotaExceeded, enforce_quota, record_usage
-from zoomify.db import increment_monthly_usage, upsert_user, user_billing_status
-from zoomify.plans import PLANS
+from zoomify.account import billing
+from zoomify.account.billing import QuotaExceeded, enforce_quota, record_usage
+from zoomify.account.db import increment_monthly_usage, upsert_user, user_billing_status
+from zoomify.account.plans import PLANS
 
 
 def test_plan_ladder_is_monotonic():
@@ -65,7 +65,7 @@ def test_canceled_subscription_falls_back_to_free():
 
 
 def test_usage_is_tracked_per_period(monkeypatch):
-    from zoomify import db
+    from zoomify.account import db
 
     monkeypatch.setattr(db, "current_period", lambda: "2026-01")
     increment_monthly_usage("u1", 5)
@@ -87,7 +87,7 @@ def test_rate_limit_blocks_bursts(monkeypatch):
 
 
 def test_rate_limit_env_override(monkeypatch):
-    from zoomify.plans import rate_limit_per_minute
+    from zoomify.account.plans import rate_limit_per_minute
 
     assert rate_limit_per_minute("free") == PLANS["free"].rate_limit_per_minute
     assert rate_limit_per_minute("unknown") == PLANS["free"].rate_limit_per_minute
@@ -107,7 +107,7 @@ def test_openapi_docs(client):
 
 
 def test_mongodb_database_from_env(monkeypatch):
-    from zoomify.db import DEFAULT_DB_NAME, mongodb_database_name
+    from zoomify.account.db import DEFAULT_DB_NAME, mongodb_database_name
 
     assert mongodb_database_name() == DEFAULT_DB_NAME
     monkeypatch.setenv("MONGODB_DATABASE", "Zoomify-Prod")
@@ -128,7 +128,7 @@ def test_stripe_webhook_checkout(client):
     }
     r = client.post("/api/billing/webhook", json=payload)
     assert r.status_code == 200
-    from zoomify.db import get_user
+    from zoomify.account.db import get_user
 
     user = get_user("user_test123")
     assert user["plan"] == "pro"

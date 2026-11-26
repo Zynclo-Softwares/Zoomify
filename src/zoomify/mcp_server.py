@@ -1,7 +1,7 @@
 """Zoomify remote MCP server — zoom tools, skills, and metering for any agent.
 
 Built on the official MCP Python SDK and served over Streamable HTTP at
-``/mcp`` by ``server.py``. Clients authenticate with a Zoomify platform API key
+``/mcp`` by ``zoomify.api.app``. Clients authenticate with a Zoomify platform API key
 (``Authorization: Bearer zfy_live_…``).
 
 Tools
@@ -33,9 +33,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from .billing import QuotaExceeded, enforce_quota, record_usage
-from .db import user_billing_status
-from .images import (
+from .account.billing import QuotaExceeded, enforce_quota, record_usage
+from .account.db import user_billing_status
+from .core.images import (
     UPLOAD_TICKET_TTL_SECONDS,
     ImageError,
     Upload,
@@ -46,11 +46,11 @@ from .images import (
     pdf_outline,
     uploads,
 )
-from .plans import plan_for_id
-from .platform_keys import is_platform_key, lookup_clerk_user_by_platform_key
-from .session import ZoomSession, store
+from .account.plans import plan_for_id
+from .account.platform_keys import is_platform_key, lookup_clerk_user_by_platform_key
+from .core.session import ZoomSession, store
 from .skills import CORE_SKILL, get_skill, load_skills, skills_index
-from .tools import ImageState, encode_view, run_tool
+from .core.tools import ImageState, encode_view, run_tool
 
 SERVER_NAME = "zoomify"
 SERVER_VERSION = "1.0.0"
@@ -130,7 +130,7 @@ def authenticate(headers: Any, query: Any = None) -> dict[str, Any]:
     Without it (local dev / self-hosting) requests fall back to a ``dev-local``
     account so the server works out of the box.
     """
-    from .clerk_auth import is_clerk_enabled
+    from .account.clerk_auth import is_clerk_enabled
 
     key = extract_api_key(headers, query)
     if key:
@@ -284,7 +284,7 @@ def _session(user_id: str, session_id: str) -> ZoomSession:
 
 
 def _grid_summary(state: ImageState) -> str:
-    from .gridder import col_label
+    from .core.gridder import col_label
 
     meta = state.meta
     return f"Grid: columns A–{col_label(meta.ncols - 1)}, rows 1–{meta.nrows}."

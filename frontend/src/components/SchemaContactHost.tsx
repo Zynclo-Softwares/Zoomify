@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { subscribeSchemaContactOpen } from "../schemaContact";
+import { subscribeSchemaContactOpen } from "../lib/schemaContact";
 import SchemaContactModal from "./SchemaContactModal";
 
 /** Global schema-service inquiry dialog (pricing, toast, settings). */

@@ -1,8 +1,8 @@
 import { useUser } from "@clerk/react";
 import { Link } from "react-router-dom";
-import { isClerkConfigured } from "../auth";
 import LandingNav from "../components/LandingNav";
 import PricingSection from "../components/PricingSection";
+import { isClerkConfigured } from "../lib/auth";
 import "../pages/LandingPage.css";
 
 function PricingShell({ userId }: { userId?: string | null }) {

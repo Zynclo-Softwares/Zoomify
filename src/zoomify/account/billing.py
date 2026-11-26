@@ -6,8 +6,8 @@ import os
 import time
 from collections import defaultdict, deque
 
-from zoomify.db import increment_monthly_usage, user_billing_status
-from zoomify.plans import PLANS, YEARLY_DISCOUNT_PERCENT, rate_limit_per_minute
+from zoomify.account.db import increment_monthly_usage, user_billing_status
+from zoomify.account.plans import PLANS, YEARLY_DISCOUNT_PERCENT, rate_limit_per_minute
 
 # Tools that count against the monthly allowance. Everything else is free.
 METERED_TOOLS = ("open_image", "zoom")

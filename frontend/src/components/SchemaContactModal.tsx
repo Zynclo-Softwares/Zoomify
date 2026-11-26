@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { submitSchemaInquiry } from "../api";
-import { showErrorToast, showSuccessToast } from "../toast";
+import { submitSchemaInquiry } from "../lib/api";
+import { showErrorToast, showSuccessToast } from "../lib/toast";
 import "./SchemaContactModal.css";
 
 type SchemaContactModalProps = {

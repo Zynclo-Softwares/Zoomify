@@ -22,9 +22,9 @@ from mcp import Client, MCPError
 from mcp.client.streamable_http import streamable_http_client
 from PIL import Image
 
-from zoomify.db import user_billing_status
-from zoomify.platform_keys import create_platform_key
-from zoomify.session import store
+from zoomify.account.db import user_billing_status
+from zoomify.account.platform_keys import create_platform_key
+from zoomify.core.session import store
 
 BASE = "http://zoomify.test"
 E2E_USER = "user_e2e"
@@ -33,7 +33,7 @@ E2E_USER = "user_e2e"
 @pytest.fixture
 def api_key(monkeypatch) -> str:
     """Turn sign-in on, as in production, and issue a platform key."""
-    from zoomify import clerk_auth
+    from zoomify.account import clerk_auth
 
     monkeypatch.setenv("CLERK_JWKS_URL", "https://example.com/jwks.json")
     clerk_auth.reset_jwks_cache()
@@ -47,7 +47,7 @@ async def connect(api_key: str | None):
     ``mcp_client`` sends the API key; ``anonymous_http`` sends no credentials,
     like the shell that runs the upload ``curl`` command.
     """
-    from server import app
+    from zoomify.api.app import app
 
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     async with app.router.lifespan_context(app):

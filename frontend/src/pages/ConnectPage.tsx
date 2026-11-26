@@ -29,6 +29,8 @@ import {
 	useState,
 } from "react";
 import { Link, Navigate } from "react-router-dom";
+import PageLoading from "../components/PageLoading";
+import ZoomifyLogo from "../components/ZoomifyLogo";
 import {
 	type BillingStatus,
 	createPlatformKey,
@@ -43,24 +45,22 @@ import {
 	type Skill,
 	type UploadedImage,
 	uploadImage,
-} from "../api";
-import { isClerkConfigured, setAuthTokenGetter } from "../auth";
-import PageLoading from "../components/PageLoading";
-import ZoomifyLogo from "../components/ZoomifyLogo";
+} from "../lib/api";
+import { isClerkConfigured, setAuthTokenGetter } from "../lib/auth";
 import {
 	CLIENTS,
 	EXAMPLE_PROMPT,
 	KEY_PLACEHOLDER,
 	uploadCurl,
-} from "../connectSnippets";
+} from "../lib/connectSnippets";
 import {
 	clearStoredPlatformKey,
 	getStoredPlatformKey,
 	maskedPlatformKey,
 	setStoredPlatformKey,
-} from "../platformKeyStorage";
-import { openSchemaContact } from "../schemaContact";
-import { showErrorToast, showSuccessToast } from "../toast";
+} from "../lib/platformKeyStorage";
+import { openSchemaContact } from "../lib/schemaContact";
+import { showErrorToast, showSuccessToast } from "../lib/toast";
 import "./ConnectPage.css";
 
 const CLIENT_STORAGE_KEY = "zoomify.connect_client";

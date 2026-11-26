@@ -6,8 +6,8 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from zoomify.plans import PlanId, plan_for_id, rate_limit_per_minute
-from zoomify.platform_keys import ensure_platform_key_indexes
+from zoomify.account.plans import PlanId, plan_for_id, rate_limit_per_minute
+from zoomify.account.platform_keys import ensure_platform_key_indexes
 
 DEFAULT_DB_NAME = "Zoomify"
 USERS = "users"

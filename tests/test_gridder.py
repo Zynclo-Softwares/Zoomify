@@ -1,11 +1,11 @@
-"""Tests for zoomify.gridder — grid geometry + drawing primitives."""
+"""Tests for zoomify.core.gridder — grid geometry + drawing primitives."""
 
 from __future__ import annotations
 
 from PIL import Image
 
-from zoomify import gridder
-from zoomify.gridder import GridMeta
+from zoomify.core import gridder
+from zoomify.core.gridder import GridMeta
 
 
 def test_col_label_basic():

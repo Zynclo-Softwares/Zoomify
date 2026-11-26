@@ -7,7 +7,7 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from zoomify.db import find_user_id_by_stripe_customer, upsert_user
+from zoomify.account.db import find_user_id_by_stripe_customer, upsert_user
 
 # Map Stripe Payment Link metadata or price lookup keys to plan ids.
 PLAN_FROM_METADATA = {

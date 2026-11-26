@@ -6,7 +6,7 @@ import sys
 
 
 def run() -> None:
-    from zoomify.db import ensure_indexes, mongodb_enabled
+    from zoomify.account.db import ensure_indexes, mongodb_enabled
 
     if not mongodb_enabled():
         print("MONGODB_URI not set — skipping index migration")

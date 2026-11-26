@@ -18,11 +18,16 @@ from pydantic import BaseModel, Field
 from starlette.routing import Route
 from starlette.types import Receive, Scope, Send
 
-from zoomify.billing import billing_plans_payload
-from zoomify.clerk_auth import is_clerk_enabled, require_clerk_user, require_user
-from zoomify.db import ensure_indexes, mongodb_database_name, mongodb_enabled, user_billing_status
-from zoomify.github_issues import create_schema_inquiry_issue, github_issues_configured
-from zoomify.images import UPLOAD_TTL_SECONDS, ImageError, describe_upload, uploads
+from zoomify.account.billing import billing_plans_payload
+from zoomify.account.clerk_auth import is_clerk_enabled, require_clerk_user, require_user
+from zoomify.account.db import (
+    ensure_indexes,
+    mongodb_database_name,
+    mongodb_enabled,
+    user_billing_status,
+)
+from zoomify.api.github_issues import create_schema_inquiry_issue, github_issues_configured
+from zoomify.core.images import UPLOAD_TTL_SECONDS, ImageError, describe_upload, uploads
 from zoomify.mcp_server import (
     BASE_URL_STATE_KEY,
     SERVER_VERSION,
@@ -35,19 +40,22 @@ from zoomify.mcp_server import (
     quotas_disabled,
     tools_catalog,
 )
-from zoomify.openapi import OPENAPI_TAGS, customize_openapi
-from zoomify.plans import plan_for_id
-from zoomify.platform_keys import (
+from zoomify.api.openapi import OPENAPI_TAGS, customize_openapi
+from zoomify.account.plans import plan_for_id
+from zoomify.account.platform_keys import (
     create_platform_key,
     platform_key_status,
     rotate_platform_key,
 )
 from zoomify.skills import get_skill, load_skills
-from zoomify.stripe_webhook import handle_event, stripe_configured, verify_and_parse
+from zoomify.account.stripe_webhook import handle_event, stripe_configured, verify_and_parse
 
 load_dotenv()
 
-FRONTEND_DIST = Path(__file__).resolve().parent / "frontend" / "dist"
+# Repo root is three levels up from src/zoomify/api/ (the package is installed
+# editable in dev and in the Docker image, so this resolves to <root>/frontend/dist).
+REPO_ROOT = Path(__file__).resolve().parents[3]
+FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
 MCP_PATH = "/mcp"
 
 

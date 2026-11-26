@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from zoomify import github_issues
+from zoomify.api import github_issues
 
 
 @pytest.fixture(autouse=True)

@@ -1,10 +1,10 @@
 import { useAuth } from "@clerk/react";
 import { ArrowUpRight, KeyRound } from "lucide-react";
 import { Link } from "react-router-dom";
-import { isClerkConfigured } from "../auth";
 import FeatureIcon, { type IconName } from "../components/FeatureIcon";
 import LandingNav from "../components/LandingNav";
 import ZoomifyLogo from "../components/ZoomifyLogo";
+import { isClerkConfigured } from "../lib/auth";
 import "./LandingPage.css";
 
 const FEATURES: { icon: IconName; title: string; desc: string }[] = [

@@ -130,7 +130,7 @@ open_image(image_id="img_…", page=10)     → next page, no new upload
 Each zoom step is stored as a **recipe** (selection + factor + regrid); views are
 rendered from the original on demand, so there are no stored intermediates.
 Sessions close after 30 minutes without use. Engine files:
-`src/zoomify/gridder.py` (grid overlay) and `src/zoomify/gridzoom.py` (crop, zoom,
+`src/zoomify/core/gridder.py` (grid overlay) and `src/zoomify/core/gridzoom.py` (crop, zoom,
 path rendering).
 
 ## Skills
@@ -193,9 +193,9 @@ and ask before writing code.
 |--------------|-------|-------|
 | A new **skill** for a kind of document you know well (P&IDs, floor plans, lab reports, invoices, maps) | `src/zoomify/skills/<name>.md` | One Markdown file, no code. Served as a prompt, a resource, and through `read_skill` automatically. |
 | Improve an existing skill | `src/zoomify/skills/` | Tell us in the issue what the agent got wrong before your change. |
-| A new or better **tool** | `src/zoomify/mcp_server.py`, `src/zoomify/tools.py` | Add tests in `tests/test_mcp_server.py`. |
-| A connection snippet for another MCP client | `frontend/src/connectSnippets.ts` | Append one entry to `CLIENTS`. |
-| Grid and zoom engine | `src/zoomify/gridder.py`, `src/zoomify/gridzoom.py` | Before and after images in the PR help a lot. |
+| A new or better **tool** | `src/zoomify/mcp_server.py`, `src/zoomify/core/tools.py` | Add tests in `tests/test_mcp_server.py`. |
+| A connection snippet for another MCP client | `frontend/src/lib/connectSnippets.ts` | Append one entry to `CLIENTS`. |
+| Grid and zoom engine | `src/zoomify/core/gridder.py`, `src/zoomify/core/gridzoom.py` | Before and after images in the PR help a lot. |
 | Docs, examples, bug reports | anywhere | A clear bug report with a sample image is a real contribution. |
 
 ### Set up and test
@@ -220,23 +220,29 @@ each kind of change needs, rebasing, and what reviewers look for.
 
 ```
 Zoomify/
-├── server.py                   # FastAPI app: /mcp endpoint, account API, web UI
 ├── src/zoomify/
 │   ├── mcp_server.py           # MCP tools, prompts, resources, auth, metering hooks
-│   ├── skills.py               # skill loader
-│   ├── skills/*.md             # the skills themselves
-│   ├── tools.py                # zoom stack state + tool dispatch
-│   ├── gridder.py              # grid overlay primitives
-│   ├── gridzoom.py             # crop + zoom + re-grid
-│   ├── images.py               # decode, PDF render, URL fetch (SSRF-guarded), uploads
-│   ├── session.py              # in-memory zoom sessions (TTL, per-account cap)
-│   ├── plans.py                # Free / Starter / Pro limits
-│   ├── billing.py              # quota + rate-limit enforcement
-│   ├── db.py                   # MongoDB or in-memory users + monthly usage
-│   ├── platform_keys.py        # zfy_live_… API keys
-│   ├── clerk_auth.py           # browser sign-in (JWT) for the web UI
-│   └── stripe_webhook.py       # subscription lifecycle
+│   ├── skills/                 # the skills (*.md) and their loader (__init__.py)
+│   ├── core/                   # the zoom engine (no database or billing)
+│   │   ├── gridder.py          # grid overlay primitives
+│   │   ├── gridzoom.py         # crop + zoom + re-grid
+│   │   ├── tools.py            # zoom stack state + tool dispatch
+│   │   ├── images.py           # decode, PDF render, URL fetch (SSRF-guarded), uploads
+│   │   └── session.py          # in-memory zoom sessions (TTL, per-account cap)
+│   ├── account/                # who is calling and what they may use
+│   │   ├── plans.py            # Free / Starter / Pro limits
+│   │   ├── billing.py          # quota + rate-limit enforcement
+│   │   ├── db.py               # MongoDB or in-memory users + monthly usage
+│   │   ├── migrations.py       # creates MongoDB indexes at deploy time
+│   │   ├── platform_keys.py    # zfy_live_… API keys
+│   │   ├── clerk_auth.py       # browser sign-in (JWT) for the web UI
+│   │   └── stripe_webhook.py   # subscription lifecycle
+│   └── api/                    # the HTTP server
+│       ├── app.py              # FastAPI app: /mcp endpoint, account API, web UI
+│       ├── openapi.py          # OpenAPI docs customisation
+│       └── github_issues.py    # files contact-form inquiries as GitHub issues
 ├── frontend/                   # React (Vite): landing, pricing, Connect page
+│   └── src/                    # pages/, components/, lib/ (API client, auth, snippets, toasts)
 ├── terraform/                  # Stripe products/prices/links, Railway, DNS
 └── tests/                      # pytest
 ```
@@ -255,7 +261,7 @@ to 15 requests.
 
 Yearly billing is 15% off. Allowances reset on the 1st of each month (UTC).
 When a limit is reached the tool returns a clear message to the agent; there are
-no overage charges. Limits are defined in one place, `src/zoomify/plans.py`.
+no overage charges. Limits are defined in one place, `src/zoomify/account/plans.py`.
 
 Stripe products, prices, Payment Links, and the webhook are provisioned with
 Terraform — see [`terraform/README.md`](terraform/README.md).

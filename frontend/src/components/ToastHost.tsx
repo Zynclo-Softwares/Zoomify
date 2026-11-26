@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { dismissToast, subscribeToasts, type ToastItem } from "../toast";
+import { dismissToast, subscribeToasts, type ToastItem } from "../lib/toast";
 import "./ToastHost.css";
 
 export default function ToastHost() {
