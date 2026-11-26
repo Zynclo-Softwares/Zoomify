@@ -27,7 +27,7 @@ def _display_prefix(key: str) -> str:
 
 
 def _keys_col():
-    from zoomify.db import _get_client, mongodb_database_name, mongodb_enabled
+    from zoomify.account.db import _get_client, mongodb_database_name, mongodb_enabled
 
     if not mongodb_enabled():
         return None

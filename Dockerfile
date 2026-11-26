@@ -6,10 +6,10 @@
 # Multi-stage build:
 #   1. frontend-builder — bun install + vite build → frontend/dist
 #   2. python-builder   — uv sync into /app/.venv
-#   3. runtime          — slim Python + venv + server.py + frontend/dist
+#   3. runtime          — slim Python + venv + src/ + frontend/dist
 #
 # FastAPI serves the SPA from frontend/dist when that directory exists
-# (see server.py). The Vite config always writes the bundle there.
+# (see src/zoomify/api/app.py). The Vite config always writes the bundle there.
 #
 # Build locally:
 #   docker build -t zoomify \
@@ -20,9 +20,9 @@
 #   docker run --rm --env-file .env -p 8000:8000 zoomify
 #
 # Deploy contract (CMD):
-#   1. python -m zoomify.migrations — apply Mongo indexes when MONGODB_URI
+#   1. python -m zoomify.account.migrations — apply Mongo indexes when MONGODB_URI
 #      is set (idempotent; fails the container if indexes cannot be created).
-#   2. uvicorn server:app — MCP endpoint (/mcp), API, and static UI on $PORT
+#   2. uvicorn zoomify.api.app:app — MCP endpoint (/mcp), API, and static UI on $PORT
 #      (Railway/Fly inject PORT). Zoom sessions and uploads live in process
 #      memory, so run a single instance (or add sticky routing) per deployment.
 # ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
 
 COPY src ./src
-COPY server.py README.md ./
+COPY README.md ./
 RUN uv sync --frozen --no-dev
 
 
@@ -95,7 +95,6 @@ WORKDIR /app
 
 COPY --from=python-builder --chown=zoomify:zoomify /app/.venv ./.venv
 COPY --from=python-builder --chown=zoomify:zoomify /app/src ./src
-COPY --from=python-builder --chown=zoomify:zoomify /app/server.py ./server.py
 COPY --from=frontend-builder --chown=zoomify:zoomify /frontend/dist ./frontend/dist
 
 USER zoomify
@@ -106,4 +105,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request,os; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\",\"8000\")}/api/health', timeout=4)" \
         || exit 1
 
-CMD ["sh", "-c", "python -m zoomify.migrations && exec uvicorn server:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips=*"]
+CMD ["sh", "-c", "python -m zoomify.account.migrations && exec uvicorn zoomify.api.app:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips=*"]

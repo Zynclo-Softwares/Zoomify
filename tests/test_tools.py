@@ -1,9 +1,9 @@
-"""Tests for zoomify.tools — stack-based zoom path + tool dispatch."""
+"""Tests for zoomify.core.tools — stack-based zoom path + tool dispatch."""
 
 from __future__ import annotations
 
-from zoomify import gridder
-from zoomify.tools import ZoomStep, encode_view, run_tool
+from zoomify.core import gridder
+from zoomify.core.tools import ZoomStep, encode_view, run_tool
 
 
 # --------------------------------------------------------------- state setup
@@ -180,7 +180,7 @@ def test_encode_view_falls_back_to_jpeg_when_png_is_heavy(small_img):
 
 
 def test_zoom_factor_lowered_for_huge_selection(state, monkeypatch):
-    from zoomify import tools
+    from zoomify.core import tools
 
     monkeypatch.setattr(tools, "MAX_ZOOMED_PIXELS", 400 * 300 * 4)
     res = run_tool("zoom", {"select": "1-6-A-H", "zoom": 8}, state)

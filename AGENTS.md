@@ -67,12 +67,13 @@ Every change goes through **one issue → one patch branch → one PR**.
 ## Repo notes for agents
 
 - Zoomify is a **remote MCP server** (no built-in LLM agent). Package lives under `src/zoomify/`
-- `server.py` (FastAPI) serves the MCP endpoint at `/mcp`, the account API under `/api`, and the React UI — `uv run uvicorn server:app`
+- The FastAPI app in `src/zoomify/api/app.py` serves the MCP endpoint at `/mcp`, the account API under `/api`, and the React UI — `uv run uvicorn zoomify.api.app:app`
+- Package layout: `core/` (zoom engine, no database), `account/` (auth, API keys, plans, billing, MongoDB), `api/` (FastAPI app), `skills/` (Markdown skills + loader)
 - MCP tools, prompts, resources, and auth: `src/zoomify/mcp_server.py` (official `mcp` SDK v2, `MCPServer`)
 - Skills are Markdown files in `src/zoomify/skills/` — adding a file is enough to expose a new skill
-- Metering: only `open_image` and `zoom` count as requests; limits live in `src/zoomify/plans.py`
+- Metering: only `open_image` and `zoom` count as requests; limits live in `src/zoomify/account/plans.py`
 - Session state is a **zoom stack** (`ImageState.path`); views render from `original + path`
-- Grid drawing: `src/zoomify/gridder.py`; zoom/crop/path: `src/zoomify/gridzoom.py`
+- Grid drawing: `src/zoomify/core/gridder.py`; zoom/crop/path: `src/zoomify/core/gridzoom.py`
 - Frontend (`frontend/`): landing, pricing, and the Connect page (`src/pages/ConnectPage.tsx`, snippets in `src/connectSnippets.ts`)
 - `.vscode/` and `Example Files/` are gitignored — do not commit them
 - License: MIT — keep copyright and credit to **Zynclo Softwares**

@@ -31,7 +31,7 @@ route53_zone_name = "zynclo.com"
 railway_env_vars = {
   CLERK_JWKS_URL                = "https://clerk.zoomify.zynclo.com/.well-known/jwks.json"
   MONGODB_DATABASE              = "Zoomify-Prod"
-  # Metered MCP requests per minute, per plan (defaults live in src/zoomify/plans.py).
+  # Metered MCP requests per minute, per plan (defaults live in src/zoomify/account/plans.py).
   RATE_LIMIT_FREE_PER_MINUTE    = "20"
   RATE_LIMIT_STARTER_PER_MINUTE = "60"
   RATE_LIMIT_PRO_PER_MINUTE     = "120"

@@ -29,7 +29,7 @@ help:
 	@echo "    make docker           Alias for make docker-up"
 	@echo ""
 	@echo "  Frontend only"
-	@echo "    make frontend-build   Build SPA → frontend/dist (served by server.py)"
+	@echo "    make frontend-build   Build SPA → frontend/dist (served by the FastAPI app)"
 	@echo ""
 	@echo "  Formatting & fixes"
 	@echo "    make format           Format + auto-fix Python, TS, and Terraform"
@@ -51,7 +51,7 @@ install:
 
 # FastAPI backend (http://127.0.0.1:8000)
 backend:
-	uv run python -m uvicorn server:app --reload --host 127.0.0.1 --port 8000
+	uv run python -m uvicorn zoomify.api.app:app --reload --host 127.0.0.1 --port 8000
 
 # React dev server (http://127.0.0.1:5173, proxies /api → backend)
 frontend:
@@ -70,7 +70,7 @@ stripe-forward:
 # Backend + Stripe CLI + frontend (Stripe forwards webhooks to /api/billing/webhook)
 dev:
 	@echo "Starting backend…"
-	@uv run python -m uvicorn server:app --reload --host 127.0.0.1 --port 8000 & \
+	@uv run python -m uvicorn zoomify.api.app:app --reload --host 127.0.0.1 --port 8000 & \
 	BACKEND_PID=$$!; \
 	STRIPE_PID=""; \
 	trap 'kill $$BACKEND_PID $$STRIPE_PID 2>/dev/null' EXIT INT TERM; \
@@ -106,8 +106,8 @@ frontend-build:
 format: format-py format-ts format-tf
 
 format-py:
-	uv run ruff format src tests server.py
-	uv run ruff check --fix src tests server.py
+	uv run ruff format src tests
+	uv run ruff check --fix src tests
 
 format-ts:
 	cd frontend && bun run format

@@ -11,11 +11,11 @@ from mcp.server.mcpserver.exceptions import ToolError
 from PIL import Image
 
 from zoomify import mcp_server
-from zoomify.db import increment_monthly_usage, user_billing_status
-from zoomify.images import uploads
-from zoomify.plans import PLANS
-from zoomify.platform_keys import create_platform_key
-from zoomify.session import store
+from zoomify.account.db import increment_monthly_usage, user_billing_status
+from zoomify.core.images import uploads
+from zoomify.account.plans import PLANS
+from zoomify.account.platform_keys import create_platform_key
+from zoomify.core.session import store
 
 USER = mcp_server.DEV_USER_ID
 
@@ -291,7 +291,7 @@ def test_extract_api_key_sources():
 
 
 def test_authenticate_dev_bypass_and_keys(monkeypatch):
-    from zoomify import clerk_auth
+    from zoomify.account import clerk_auth
 
     assert mcp_server.authenticate({})["sub"] == USER
 
@@ -361,7 +361,7 @@ def test_http_tool_call_roundtrip(live_client, small_png_bytes):
 
 
 def test_http_requires_key_when_clerk_enabled(live_client, monkeypatch):
-    from zoomify import clerk_auth
+    from zoomify.account import clerk_auth
 
     monkeypatch.setenv("CLERK_JWKS_URL", "https://example.com/jwks.json")
     clerk_auth.reset_jwks_cache()
@@ -390,7 +390,7 @@ def test_http_requires_key_when_clerk_enabled(live_client, monkeypatch):
 
 
 def test_http_usage_is_attributed_to_the_key_owner(live_client, small_png_bytes, monkeypatch):
-    from zoomify import clerk_auth
+    from zoomify.account import clerk_auth
 
     monkeypatch.setenv("CLERK_JWKS_URL", "https://example.com/jwks.json")
     clerk_auth.reset_jwks_cache()
@@ -451,7 +451,7 @@ def test_upload_link_rejects_bad_files_but_can_be_retried(server, client, small_
 
 
 def test_upload_link_enforces_plan_size(server, client, small_png_bytes, monkeypatch):
-    from zoomify import images
+    from zoomify.core import images
 
     ticket = images.uploads.issue_ticket(USER, max_bytes=10)
     r = client.put(f"/api/uploads/{ticket.token}", content=small_png_bytes)
@@ -460,7 +460,7 @@ def test_upload_link_enforces_plan_size(server, client, small_png_bytes, monkeyp
 
 
 def test_upload_tickets_expire(monkeypatch):
-    from zoomify import images
+    from zoomify.core import images
 
     s = images.UploadStore()
     ticket = s.issue_ticket("u1", 100)

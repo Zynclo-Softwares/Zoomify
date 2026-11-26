@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
-// Bundled by FastAPI (server.py → frontend/dist) and the production Dockerfile.
+// Bundled by FastAPI (src/zoomify/api/app.py → frontend/dist) and the production Dockerfile.
 const bundleOutDir = path.resolve(frontendRoot, "dist");
 
 export default defineConfig({

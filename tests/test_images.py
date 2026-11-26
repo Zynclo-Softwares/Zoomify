@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from zoomify import images
-from zoomify.images import ImageError, UploadStore, describe_upload, fetch_url, load_image
+from zoomify.core import images
+from zoomify.core.images import ImageError, UploadStore, describe_upload, fetch_url, load_image
 
 
 def test_load_raster(small_png_bytes):
@@ -170,7 +170,7 @@ def test_fetch_url_enforces_size_and_status(monkeypatch):
 
 
 def test_parse_page_selection():
-    from zoomify.images import parse_page_selection
+    from zoomify.core.images import parse_page_selection
 
     assert parse_page_selection(None, 5, 30) == ([1, 2, 3, 4, 5], False)
     assert parse_page_selection("4, 1-2", 5, 30) == ([1, 2, 4], False)
@@ -181,7 +181,7 @@ def test_parse_page_selection():
 
 
 def test_pdf_outline(text_pdf_bytes, small_png_bytes):
-    from zoomify.images import pdf_outline
+    from zoomify.core.images import pdf_outline
 
     outline = pdf_outline(text_pdf_bytes, pages="1-2", previews=True)
     assert outline.page_count == 3

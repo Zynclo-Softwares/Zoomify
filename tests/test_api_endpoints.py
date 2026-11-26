@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from zoomify.db import get_user, upsert_user
+from zoomify.account.db import get_user, upsert_user
 
 
 def test_health(client):
@@ -76,7 +76,7 @@ def test_upload_image_returns_id(client, small_png_bytes):
     assert body["pages"] == 1
     assert body["bytes"] == len(small_png_bytes)
 
-    from zoomify.images import uploads
+    from zoomify.core.images import uploads
 
     assert uploads.get("dev-local", body["image_id"]).data == small_png_bytes
     assert uploads.get("someone-else", body["image_id"]) is None
@@ -101,8 +101,8 @@ def test_upload_rejects_empty(client):
 
 
 def test_upload_enforces_plan_size(client, small_png_bytes, monkeypatch):
-    import server
-    from zoomify.plans import PLANS, Plan
+    from zoomify.api import app as server
+    from zoomify.account.plans import PLANS, Plan
 
     tiny = Plan(**{**PLANS["free"].__dict__, "max_image_mb": 0})
     monkeypatch.setattr(server, "plan_for_id", lambda _id: tiny)
@@ -111,8 +111,8 @@ def test_upload_enforces_plan_size(client, small_png_bytes, monkeypatch):
 
 
 def test_upload_requires_auth_when_clerk_enabled(client, small_png_bytes, monkeypatch):
-    from zoomify import clerk_auth
-    from zoomify.platform_keys import create_platform_key
+    from zoomify.account import clerk_auth
+    from zoomify.account.platform_keys import create_platform_key
 
     monkeypatch.setenv("CLERK_JWKS_URL", "https://example.com/jwks.json")
     clerk_auth.reset_jwks_cache()

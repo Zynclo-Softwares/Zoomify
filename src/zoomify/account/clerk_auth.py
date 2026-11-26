@@ -10,7 +10,7 @@ import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
-from zoomify.platform_keys import is_platform_key, lookup_clerk_user_by_platform_key
+from zoomify.account.platform_keys import is_platform_key, lookup_clerk_user_by_platform_key
 
 _bearer = HTTPBearer(
     auto_error=False,
